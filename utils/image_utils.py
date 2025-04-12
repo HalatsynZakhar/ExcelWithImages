@@ -114,7 +114,7 @@ def find_image_by_article(article: Any, images_folder: str,
         logger.error(f"Ошибка при поиске изображения по артикулу '{article}': {e}")
         return None
 
-def optimize_image(image_path: str, max_size_kb: int = 200, 
+def optimize_image(image_path: str, max_size_kb: int = 20000, 
                   quality_step: int = 5, min_quality: int = 30, 
                   target_width: int = 500, target_height: int = 500) -> io.BytesIO:
     """
@@ -122,7 +122,7 @@ def optimize_image(image_path: str, max_size_kb: int = 200,
     
     Args:
         image_path (str): Путь к изображению
-        max_size_kb (int): Максимальный размер файла в КБ
+        max_size_kb (int): Максимальный размер файла в КБ (по умолчанию 20000 - 20MB)
         quality_step (int): Шаг снижения качества JPEG
         min_quality (int): Минимальное допустимое качество
         target_width (int): Целевая ширина
@@ -679,4 +679,89 @@ def extract_articles_from_image_names(folder_path: str,
         return article_to_image
     except Exception as e:
         logger.error(f"Ошибка при извлечении артикулов из имен файлов в папке {folder_path}: {e}")
-        return {} 
+        return {}
+
+def find_images_by_article(article: Any, images_folder: str, 
+                         supported_extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) -> List[str]:
+    """
+    Находит все изображения по артикулу в указанной папке
+    
+    Args:
+        article (Any): Артикул для поиска
+        images_folder (str): Путь к папке с изображениями
+        supported_extensions (Tuple[str, ...]): Поддерживаемые расширения файлов
+        
+    Returns:
+        List[str]: Список путей к найденным изображениям или пустой список, если не найдено
+    """
+    try:
+        if not article:
+            logger.warning("Пустой артикул")
+            return []
+            
+        if not os.path.exists(images_folder):
+            logger.error(f"Папка не найдена: {images_folder}")
+            return []
+            
+        normalized_article = normalize_article(article)
+        if not normalized_article:
+            logger.warning(f"Артикул после нормализации пуст: {article}")
+            return []
+            
+        logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article}')")
+        
+        # Проверяем, существуют ли файлы в папке
+        files = os.listdir(images_folder)
+        if not files:
+            logger.warning(f"Папка пуста: {images_folder}")
+            return []
+        
+        # Создаем словарь нормализованных имен файлов
+        file_dict = {}
+        img_count = 0
+        
+        for filename in files:
+            if any(filename.lower().endswith(ext) for ext in supported_extensions):
+                img_count += 1
+                name_without_ext = os.path.splitext(filename)[0]
+                normalized_name = normalize_article(name_without_ext)
+                file_dict[normalized_name] = filename
+                logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
+                
+        logger.debug(f"Всего найдено {img_count} изображений с поддерживаемыми расширениями")
+        
+        # Список для хранения найденных изображений
+        found_images = []
+                
+        # Проверяем точное совпадение
+        if normalized_article in file_dict:
+            image_path = os.path.join(images_folder, file_dict[normalized_article])
+            logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
+            
+            # Дополнительная проверка, что файл существует и доступен
+            if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
+                found_images.append(image_path)
+            else:
+                logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+            
+        # Проверяем частичное совпадение
+        for norm_name, filename in file_dict.items():
+            if normalized_article in norm_name or norm_name in normalized_article:
+                image_path = os.path.join(images_folder, filename)
+                # Убедимся, что это не дубликат уже найденного изображения
+                if image_path not in found_images:
+                    logger.info(f"Найдено частичное совпадение для артикула '{article}': {image_path}")
+                    
+                    # Дополнительная проверка, что файл существует и доступен
+                    if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
+                        found_images.append(image_path)
+                    else:
+                        logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                
+        if not found_images:
+            logger.warning(f"Изображения для артикула '{article}' не найдены")
+            
+        return found_images
+    except Exception as e:
+        logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
+        return [] 

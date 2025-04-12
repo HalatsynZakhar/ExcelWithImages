@@ -14,6 +14,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl import load_workbook
 from PIL import Image as PILImage
 import json
+import platform
 
 # Добавляем корневую папку проекта в PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -22,7 +23,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import config_manager
 from utils import excel_utils
 from utils import image_utils
-from utils.config_manager import get_downloads_folder
+from utils.config_manager import get_downloads_folder, ConfigManager
 
 # Настройка логирования
 log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'logs')
@@ -83,48 +84,72 @@ default_settings = {
         "start_row": 1,
         "adjust_cell_size": False,
         "column_width": 150,
-        "row_height": 120
-    },
-    "image_settings": {
-        "max_file_size_mb": 20
+        "row_height": 120,
+        "max_file_size_mb": 50  # Максимальный размер результирующего файла в МБ
     },
     "check_images_on_startup": False
 }
 
 # Инициализация менеджера конфигурации с созданием настроек по умолчанию
-def init_config_manager(config_folder):
-    """
-    Инициализирует менеджер конфигурации и создает настройки по умолчанию, если их нет.
+def init_config_manager():
+    """Инициализировать менеджер конфигурации и установить значения по умолчанию"""
+    if 'config_manager' not in st.session_state:
+        # Определяем путь к папке с пресетами
+        presets_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'settings_presets')
+        
+        # Инициализируем config manager с указанием папки пресетов
+        config_manager_instance = config_manager.ConfigManager(presets_folder)
+        
+        # Получаем путь к папке загрузок пользователя
+        downloads_folder = get_downloads_folder()
+        
+        # Устанавливаем значения по умолчанию, если они отсутствуют в конфиге
+        if not config_manager_instance.get_setting('paths.images_folder_path'):
+            config_manager_instance.set_setting('paths.images_folder_path', downloads_folder)
+            # Логируем установку пути по умолчанию
+            log.info(f"Установлен путь к папке с изображениями по умолчанию: {downloads_folder}")
+            
+        if not config_manager_instance.get_setting('paths.output_folder_path'):
+            config_manager_instance.set_setting('paths.output_folder_path', downloads_folder)
+            
+        if not config_manager_instance.get_setting('excel_settings.max_file_size_mb'):
+            config_manager_instance.set_setting('excel_settings.max_file_size_mb', 20)
+            
+        if not config_manager_instance.get_setting('image_settings.target_width'):
+            config_manager_instance.set_setting('image_settings.target_width', 800)
+            
+        if not config_manager_instance.get_setting('image_settings.target_height'):
+            config_manager_instance.set_setting('image_settings.target_height', 600)
+        
+        # Сохраняем конфигурацию
+        config_manager_instance.save_settings("Default")
+        
+        # Сохраняем менеджер в session_state
+        st.session_state.config_manager = config_manager_instance
+        
+        log.info("Менеджер конфигурации инициализирован с настройками по умолчанию")
     
-    Args:
-        config_folder (str): Путь к папке для хранения настроек
-    """
-    # Проверяем наличие папки настроек
-    os.makedirs(config_folder, exist_ok=True)
-    
-    # Определяем путь к файлу настроек по умолчанию
-    default_settings_path = os.path.join(config_folder, 'default_settings.json')
-    
-    # Если файл настроек не существует, создаем его
-    if not os.path.exists(default_settings_path):
-        try:
-            with open(default_settings_path, 'w', encoding='utf-8') as f:
-                json.dump(default_settings, f, ensure_ascii=False, indent=4)
-            log.info(f"Created default settings file: {default_settings_path}")
-        except Exception as e:
-            log.error(f"Error creating default settings file: {str(e)}")
-    
-    # Инициализируем менеджер конфигурации
-    config_manager.init_config_manager(config_folder)
-    
-    # Применяем настройки по умолчанию, если текущих настроек нет
-    if not config_manager.get_config_manager().current_settings:
-        config_manager.get_config_manager().current_settings = default_settings
-        log.info("Applied default settings")
+    return st.session_state.config_manager
+
+def get_downloads_folder():
+    """Получить путь к папке загрузок пользователя"""
+    if platform.system() == "Windows":
+        import winreg
+        sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+        downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+            downloads_folder = winreg.QueryValueEx(key, downloads_guid)[0]
+            return downloads_folder
+    elif platform.system() == "Darwin":  # macOS
+        return os.path.join(os.path.expanduser('~'), 'Downloads')
+    else:  # Linux и другие системы
+        return os.path.join(os.path.expanduser('~'), 'Downloads')
 
 # Обновляем код инициализации для использования нашей функции
 config_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'settings_presets')
-init_config_manager(config_folder)
+# Инициализируем глобальный config_manager в модуле config_manager перед инициализацией нашего
+config_manager.init_config_manager(config_folder)
+init_config_manager()
 
 # Настройка параметров приложения
 st.set_page_config(
@@ -157,8 +182,13 @@ def ensure_temp_dir(prefix: str = "") -> str:
         log.error(f"Ошибка при создании временной директории {temp_dir}: {e}")
         # Если не удалось создать в проекте, используем системную временную директорию
         temp_dir = os.path.join(tempfile.gettempdir(), f"{prefix}excelwithimages")
-        os.makedirs(temp_dir, exist_ok=True)
-        log.info(f"Использована системная временная директория: {temp_dir}")
+        try:
+            os.makedirs(temp_dir, exist_ok=True)
+            log.info(f"Использована системная временная директория: {temp_dir}")
+        except Exception as e:
+            log.error(f"Ошибка при создании системной временной директории {temp_dir}: {e}")
+            # Если и системная не удалась, выбрасываем исключение
+            raise RuntimeError("Не удалось создать временную директорию") from e
     
     return temp_dir
 
@@ -288,15 +318,22 @@ def update_sidebar_buttons():
 
 # Функция для отображения настроек
 def show_settings():
+    # Получаем config_manager из session_state в начале функции
+    config_manager = st.session_state.config_manager
+
     # Убираем дублирующий подзаголовок
     # st.sidebar.subheader("Настройки")
     
     # Добавляем настройки путей в боковую панель
     with st.sidebar.expander("Настройки путей", expanded=True):
+        # Получаем папку загрузок по умолчанию
+        default_downloads = get_downloads_folder()
+        default_images_path = os.path.join(default_downloads, "images")
+        
         # Папка с изображениями
         images_folder = st.sidebar.text_input(
             "Папка с изображениями",
-            value=config_manager.get_setting("paths.images_folder_path", ""),
+            value=config_manager.get_setting("paths.images_folder_path", default_images_path),
             help="Укажите путь к папке, где находятся изображения для вставки",
             key="images_folder_input"
         )
@@ -315,69 +352,122 @@ def show_settings():
             
             # Сохраняем путь в настройках
             config_manager.set_setting("paths.images_folder_path", images_folder)
+            # Явно сохраняем настройки в файл
+            config_manager.save_settings() # Assuming save_settings might not need 'Default' here, check definition if error
+            log.info(f"Сохранен путь к папке изображений: {images_folder}")
     
     # Настройки изображений
     with st.sidebar.expander("Настройки изображений", expanded=True):
-        # Максимальный размер файла изображения
-        max_file_size_mb = st.sidebar.number_input(
-            "Максимальный размер файла (МБ)",
-            min_value=1,
-            max_value=50,
-            value=config_manager.get_setting("image_settings.max_file_size_mb", 20),
-            help="Максимально допустимый размер файла изображения в мегабайтах",
-            key="max_file_size_input",
-            label_visibility="visible"
-        )
-        config_manager.set_setting("image_settings.max_file_size_mb", int(max_file_size_mb))
+        """Отображение настроек изображений"""
+        st.subheader("Настройки изображений")
         
-        # Настройка изменения размера ячейки
-        adjust_cell_size = st.sidebar.checkbox(
-            "Изменить размер ячейки",
+        # Удаляем эту строку, так как config_manager уже определен выше
+        # config_manager = st.session_state.config_manager 
+        
+        # Максимальный размер Excel-файла
+        st.markdown("### Ограничение размера файла")
+        st.markdown("""
+        Укажите максимальный размер результирующего Excel-файла в мегабайтах.
+        Изображения будут автоматически оптимизированы, чтобы общий размер файла не превышал указанное значение.
+        """)
+        
+        max_file_size_mb = st.number_input(
+            "Максимальный размер Excel-файла (МБ)",
+            min_value=1,
+            max_value=100,
+            value=int(config_manager.get_setting('excel_settings.max_file_size_mb', 20)),
+            help="Максимальный размер результирующего Excel-файла в мегабайтах"
+        )
+        
+        if max_file_size_mb != config_manager.get_setting('excel_settings.max_file_size_mb'):
+            config_manager.set_setting('excel_settings.max_file_size_mb', max_file_size_mb)
+            config_manager.save_settings("Default")
+            log.info(f"Установлен максимальный размер Excel-файла: {max_file_size_mb} МБ")
+        
+        # Качество изображения
+        st.markdown("### Качество изображений")
+        st.markdown("""
+        Укажите качество сжатия изображений (от 1 до 100).
+        Большее значение даёт лучшее качество, но увеличивает размер файла.
+        """)
+        
+        quality = st.slider(
+            "Качество изображений",
+            min_value=1,
+            max_value=100,
+            value=int(config_manager.get_setting('image_settings.quality', 80)),
+            help="Качество сжатия изображений (от 1 до 100)"
+        )
+        
+        if quality != config_manager.get_setting('image_settings.quality'):
+            config_manager.set_setting('image_settings.quality', quality)
+            config_manager.save_settings("Default")
+            log.info(f"Установлено качество изображений: {quality}")
+        
+        # Добавляем кнопку сброса настроек к значениям по умолчанию
+        if st.button("Сбросить настройки изображений"):
+            config_manager.set_setting('excel_settings.max_file_size_mb', 20)
+            config_manager.set_setting('image_settings.quality', 80)
+            config_manager.save_settings("Default")
+            st.success("Настройки изображений сброшены к значениям по умолчанию")
+            log.info("Настройки изображений сброшены к значениям по умолчанию")
+    
+    # Настройки форматирования ячеек
+    with st.sidebar.expander("Настройки форматирования ячеек", expanded=True):
+        st.subheader("Размеры ячеек и изображений")
+        
+        adjust_cell_size = st.checkbox(
+            "Автоматически подбирать размер ячеек",
             value=config_manager.get_setting("excel_settings.adjust_cell_size", False),
-            help="Если включено, размеры ячеек будут изменены для лучшего отображения изображений",
-            key="adjust_cell_size_input",
-            label_visibility="visible"
+            help="Если включено, высота строк и ширина колонки с изображениями будут изменены",
+            key="adjust_cell_size_input"
         )
-        config_manager.set_setting("excel_settings.adjust_cell_size", adjust_cell_size)
-        
-        # Показываем настройки размеров только если включено изменение размера ячейки
+        # Сохраняем настройку
+        if adjust_cell_size != config_manager.get_setting("excel_settings.adjust_cell_size", False):
+             config_manager.set_setting("excel_settings.adjust_cell_size", adjust_cell_size)
+             config_manager.save_settings("Default")
+             log.info(f"Настройка adjust_cell_size изменена на: {adjust_cell_size}")
+
         if adjust_cell_size:
-            col1, col2 = st.sidebar.columns(2)
-            
-            # Ширина колонки
-            column_width = col1.number_input(
-                "Ширина колонки (пикс.)",
-                min_value=50,
-                max_value=500,
-                value=config_manager.get_setting("excel_settings.column_width", 150),
-                help="Желаемая ширина колонки с изображениями в пикселях",
-                key="column_width_input",
-                label_visibility="visible"
-            )
-            config_manager.set_setting("excel_settings.column_width", int(column_width))
-            
-            # Высота строки
-            row_height = col2.number_input(
-                "Высота строки (пикс.)",
-                min_value=30,
-                max_value=500,
-                value=config_manager.get_setting("excel_settings.row_height", 120),
-                help="Желаемая высота строки с изображениями в пикселях",
-                key="row_height_input",
-                label_visibility="visible"
-            )
-            config_manager.set_setting("excel_settings.row_height", int(row_height))
-            
-        # Начальная строка
-        start_row = st.sidebar.number_input(
-            "Начальная строка",
-            min_value=1,
-            value=config_manager.get_setting("excel_settings.start_row", 1),
-            help="Номер строки, с которой начнется обработка (по умолчанию с первой строки)",
-            key="start_row_input",
-            label_visibility="visible"
-        )
-        config_manager.set_setting("excel_settings.start_row", int(start_row))
+            col1, col2 = st.columns(2)
+            with col1:
+                column_width = st.number_input(
+                    "Ширина колонки (пикс.)",
+                    min_value=50,
+                    max_value=800,
+                    value=config_manager.get_setting("excel_settings.column_width", 150),
+                    help="Желаемая ширина колонки с изображениями в пикселях",
+                    key="column_width_input"
+                )
+                if column_width != config_manager.get_setting("excel_settings.column_width", 150):
+                    config_manager.set_setting("excel_settings.column_width", int(column_width))
+                    config_manager.save_settings("Default")
+                    log.info(f"Настройка column_width изменена на: {column_width}")
+
+            with col2:
+                row_height = st.number_input(
+                    "Высота строки (пикс.)",
+                    min_value=30,
+                    max_value=600,
+                    value=config_manager.get_setting("excel_settings.row_height", 120),
+                    help="Желаемая высота строки с изображениями в пикселях",
+                    key="row_height_input"
+                )
+                if row_height != config_manager.get_setting("excel_settings.row_height", 120):
+                    config_manager.set_setting("excel_settings.row_height", int(row_height))
+                    config_manager.save_settings("Default")
+                    log.info(f"Настройка row_height изменена на: {row_height}")
+
+    # Начальная строка
+    start_row = st.sidebar.number_input(
+        "Начальная строка",
+        min_value=1,
+        value=config_manager.get_setting("excel_settings.start_row", 1),
+        help="Номер строки, с которой начнется обработка (по умолчанию с первой строки)",
+        key="start_row_input",
+        label_visibility="visible"
+    )
+    config_manager.set_setting("excel_settings.start_row", int(start_row))
 
 # Функция для отображения предпросмотра таблицы
 def show_table_preview(df):
@@ -964,33 +1054,100 @@ def file_uploader_section():
                     # Проверка всех необходимых полей перед обработкой
                     process_button_disabled = not all_inputs_valid()
                     
-                    # Заменяем JavaScript-кнопку на стандартную кнопку Streamlit
-                    if st.button("Обработать файл", disabled=process_button_disabled, type="primary"):
-                        with st.spinner("Обработка файла..."):
-                            st.session_state.is_processing = True
-                            success = process_files()
-                            if success:
-                                st.success("Файл успешно обработан!")
-                            else:
-                                st.error(f"Ошибка при обработке файла: {st.session_state.processing_error}")
+                    # Кнопка для запуска обработки
+                    st.button("Обработать файл", 
+                              disabled=process_button_disabled, 
+                              type="primary", 
+                              key="process_button",
+                              on_click=trigger_processing)
                     
-                else:
+                    # Запускаем обработку, если установлен флаг
+                    if st.session_state.get('start_processing', False):
+                        st.info("Идет обработка файла. Не закрывайте страницу и не взаимодействуйте с интерфейсом до завершения.")
+                        st.write("Это может занять некоторое время в зависимости от количества строк и изображений.")
+                        
+                        # Блокируем интерфейс на время обработки
+                        with st.spinner("Обработка файла..."):
+                            # Очищаем предыдущие результаты и ошибки
+                            st.session_state.processing_result = None
+                            st.session_state.processing_error = None
+                            
+                            # Выполняем обработку
+                            success = process_files()
+                            
+                            # Записываем результат в session_state для отображения после перезагрузки
+                            if success:
+                                st.session_state.processing_result = "Файл успешно обработан! Вы можете скачать его ниже."
+                                # Устанавливаем флаг для автоматического скролла к секции скачивания после перезагрузки
+                                st.session_state.scroll_to_download = True
+                            else:
+                                st.session_state.processing_error_message = st.session_state.processing_error
+                        
+                        # Сбрасываем флаг обработки
+                        st.session_state.start_processing = False
+                        
+                        # Форсируем перезагрузку страницы для обновления UI
+                        st.rerun()
+                    
+        else:
                     st.warning("Файл не содержит колонок для выбора. Проверьте структуру Excel-файла.")
                     
-        # Отображение результатов обработки
-        if st.session_state.processing_result:
-            st.success(st.session_state.processing_result)
+        # Отображение результатов обработки и ошибок после обработки файла
+        # Показываем только если обработка не выполняется сейчас
+        if not st.session_state.get('start_processing', False):
+            # Успешное завершение обработки
+            if st.session_state.get('processing_result'):
+                st.success(st.session_state.processing_result)
+                # Если нужно автоматически прокрутить к секции скачивания
+                if st.session_state.get('scroll_to_download', False):
+                    st.markdown('<script>setTimeout(function() { window.scrollTo(0, document.body.scrollHeight); }, 500);</script>', 
+                                unsafe_allow_html=True)
+                    # Сбрасываем флаг скролла
+                    st.session_state.scroll_to_download = False
+    
+            # Ошибка обработки
+            if st.session_state.get('processing_error_message'):
+                st.error(f"Ошибка при обработке файла: {st.session_state.processing_error_message}")
+                # Очищаем сообщение об ошибке после отображения
+                st.session_state.processing_error_message = None
             
-        # Добавление кнопки скачивания, если файл был обработан
-        if st.session_state.output_file_path and os.path.exists(st.session_state.output_file_path):
-            with open(st.session_state.output_file_path, "rb") as file:
-                st.download_button(
-                    label="Скачать обработанный файл",
-                    data=file,
-                    file_name=os.path.basename(st.session_state.output_file_path),
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+            # Добавление кнопки скачивания, если файл был обработан
+            if st.session_state.output_file_path and os.path.exists(st.session_state.output_file_path):
+                # Добавляем CSS для огромной красной кнопки
+                st.markdown("""
+                <style>
+                div[data-testid="stDownloadButton"] button {
+                    background-color: #FF0000 !important;
+                    color: white !important;
+                    font-size: 24px !important;
+                    font-weight: bold !important;
+                    height: 100px !important;
+                    width: 100% !important;
+                    margin: 20px 0 !important;
+                    border-radius: 12px !important;
+                    border: 3px solid #990000 !important;
+                    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3) !important;
+                    transition: all 0.3s !important;
+                }
+                div[data-testid="stDownloadButton"] button:hover {
+                    background-color: #CC0000 !important;
+                    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4) !important;
+                    transform: translateY(-3px) !important;
+                }
+                </style>
+                """, unsafe_allow_html=True)
                 
+                # Создаем заголовок для привлечения внимания
+                st.markdown('<h1 style="text-align: center; color: #FF0000; margin: 30px 0;">⬇️ СКАЧАТЬ ФАЙЛ ⬇️</h1>', unsafe_allow_html=True)
+                
+                with open(st.session_state.output_file_path, "rb") as file:
+                    st.download_button(
+                        label="СКАЧАТЬ ОБРАБОТАННЫЙ ФАЙЛ",
+                        data=file,
+                        file_name=os.path.basename(st.session_state.output_file_path),
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+        
         # Добавляем отображение логов вместо отладочной информации
         with st.expander("Журнал событий", expanded=False):
             # Отображаем сообщения из st.session_state.log_messages
@@ -1024,130 +1181,152 @@ def process_files():
         st.session_state.processing_result = None
         st.session_state.processing_error = None
         
-        # Получаем необходимые настройки
-        images_folder = config_manager.get_setting("paths.images_folder_path", "")
-        
-        # Создаем директорию для хранения результатов
-        temp_dir = ensure_temp_dir()
-        output_folder = temp_dir
-        
-        add_log_message(f"Папка изображений: {images_folder}", "INFO")
-        
-        # Детальная проверка всех условий
-        conditions = {
-            "DataFrame загружен": st.session_state.df is not None,
-            "Временный файл существует": st.session_state.temp_file_path is not None,
-            "Файл доступен": os.path.exists(st.session_state.temp_file_path) if st.session_state.temp_file_path else False,
-            "Выбран лист": st.session_state.selected_sheet is not None,
-            "Указана колонка с артикулами": st.session_state.get('article_column') is not None,
-            "Указана колонка с изображениями": st.session_state.get('image_column') is not None,
-            "Папка изображений указана": images_folder != "",
-            "Папка изображений существует": os.path.exists(images_folder) if images_folder else False
-        }
-        
-        # Логируем все условия
-        for condition, result in conditions.items():
-            log.info(f"Проверка: {condition} = {result}")
-            add_log_message(f"Проверка: {condition} = {result}", "INFO" if result else "WARNING")
-        
-        # Проверяем все условия
-        all_conditions_met = all(conditions.values())
-        if not all_conditions_met:
-            failed_conditions = [cond for cond, result in conditions.items() if not result]
-            error_msg = f"Не выполнены следующие условия: {', '.join(failed_conditions)}"
-            log.error(error_msg)
-            add_log_message(error_msg, "ERROR")
-            st.session_state.processing_error = error_msg
-            st.session_state.is_processing = False
-            return False
+        # Отключаем взаимодействие с интерфейсом во время обработки
+        # Показываем крутящийся индикатор загрузки
+        with st.spinner("Идет обработка файла. Пожалуйста, подождите..."):
+            # Получаем необходимые настройки
+            images_folder = config_manager.get_setting("paths.images_folder_path", "")
             
-        # Получаем данные из session_state
-        excel_file_path = st.session_state.temp_file_path
-        article_column = st.session_state.get('article_column')
-        image_column = st.session_state.get('image_column')
-        selected_sheet = st.session_state.selected_sheet
-        
-        log.info(f"Параметры обработки:")
-        log.info(f"- Файл: {excel_file_path}")
-        log.info(f"- Лист: {selected_sheet}")
-        log.info(f"- Колонка с артикулами: {article_column}")
-        log.info(f"- Колонка с изображениями: {image_column}")
-        log.info(f"- Папка с изображениями: {images_folder}")
-        
-        add_log_message(f"Обработка файла: {os.path.basename(excel_file_path)}, лист: {selected_sheet}", "INFO")
-        add_log_message(f"Колонки: артикулы - {article_column}, изображения - {image_column}", "INFO")
-        
-        # Создаем имя выходного файла
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
-        output_file_path = os.path.join(output_folder, output_filename)
-        log.info(f"Выходной файл будет: {output_file_path}")
-        add_log_message(f"Подготовка выходного файла: {output_filename}", "INFO")
-        
-        # Проверяем наличие модуля обработки
-        try:
-            from core.processor import process_excel_file
-            log.info("Модуль process_excel_file успешно импортирован")
-        except ImportError as e:
-            error_msg = f"Ошибка импорта модуля обработки: {str(e)}"
-            log.error(error_msg)
-            add_log_message(error_msg, "ERROR")
-            st.session_state.processing_error = error_msg
-            return False
-        
-        try:
-            log.info("Вызываем process_excel_file с аргументами:")
-            log.info(f"- excel_file_path={excel_file_path}")
-            log.info(f"- article_column={article_column}")
-            log.info(f"- image_column={image_column}")
-            log.info(f"- image_folder={images_folder}")
-            log.info(f"- sheet_name={selected_sheet}")
+            # Создаем директорию для хранения результатов
+            temp_dir = ensure_temp_dir()
+            output_folder = temp_dir
             
-            add_log_message("Запуск обработки файла...", "INFO")
+            add_log_message(f"Папка изображений: {images_folder}", "INFO")
             
-            # Распаковываем результат функции process_excel_file
-            result_file_path, result_df, images_inserted = process_excel_file(
-                file_path=excel_file_path,
-                article_column=article_column,
-                image_folder=images_folder,
-                image_column_name=image_column,
-                sheet_name=selected_sheet,
-                output_folder=output_folder
-            )
+            # Детальная проверка всех условий
+            conditions = {
+                "DataFrame загружен": st.session_state.df is not None,
+                "Временный файл существует": st.session_state.temp_file_path is not None,
+                "Файл доступен": os.path.exists(st.session_state.temp_file_path) if st.session_state.temp_file_path else False,
+                "Выбран лист": st.session_state.selected_sheet is not None,
+                "Указана колонка с артикулами": st.session_state.get('article_column') is not None,
+                "Указана колонка с изображениями": st.session_state.get('image_column') is not None,
+                "Папка изображений указана": images_folder != "",
+                "Папка изображений существует": os.path.exists(images_folder) if images_folder else False
+            }
             
-            log.info(f"Файл успешно обработан: {result_file_path}")
-            log.info(f"Вставлено изображений: {images_inserted}")
+            # Логируем все условия
+            for condition, result in conditions.items():
+                log.info(f"Проверка: {condition} = {result}")
+                add_log_message(f"Проверка: {condition} = {result}", "INFO" if result else "WARNING")
             
-            add_log_message(f"Обработка завершена. Вставлено изображений: {images_inserted}", "SUCCESS")
+            # Проверяем все условия
+            all_conditions_met = all(conditions.values())
+            if not all_conditions_met:
+                failed_conditions = [cond for cond, result in conditions.items() if not result]
+                error_msg = f"Не выполнены следующие условия: {', '.join(failed_conditions)}"
+                log.error(error_msg)
+                add_log_message(error_msg, "ERROR")
+                st.session_state.processing_error = error_msg
+                st.session_state.is_processing = False
+                return False
+                
+            # Получаем данные из session_state
+            excel_file_path = st.session_state.temp_file_path
+            article_column = st.session_state.get('article_column')
+            image_column = st.session_state.get('image_column')
+            selected_sheet = st.session_state.selected_sheet
             
-            # Проверяем, что результирующий файл создан
-            if not os.path.exists(result_file_path):
-                error_msg = "Выходной файл не был создан, хотя ошибок не возникло"
+            log.info(f"Параметры обработки:")
+            log.info(f"- Файл: {excel_file_path}")
+            log.info(f"- Лист: {selected_sheet}")
+            log.info(f"- Колонка с артикулами: {article_column}")
+            log.info(f"- Колонка с изображениями: {image_column}")
+            log.info(f"- Папка с изображениями: {images_folder}")
+            
+            add_log_message(f"Обработка файла: {os.path.basename(excel_file_path)}, лист: {selected_sheet}", "INFO")
+            add_log_message(f"Колонки: артикулы - {article_column}, изображения - {image_column}", "INFO")
+            
+            # Создаем имя выходного файла
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
+            output_file_path = os.path.join(output_folder, output_filename)
+            log.info(f"Выходной файл будет: {output_file_path}")
+            add_log_message(f"Подготовка выходного файла: {output_filename}", "INFO")
+            
+            # Проверяем наличие модуля обработки
+            try:
+                from core.processor import process_excel_file
+                log.info("Модуль process_excel_file успешно импортирован")
+            except ImportError as e:
+                error_msg = f"Ошибка импорта модуля обработки: {str(e)}"
                 log.error(error_msg)
                 add_log_message(error_msg, "ERROR")
                 st.session_state.processing_error = error_msg
                 return False
+            
+            try:
+                # Сначала сохраняем выбранный лист во временный файл
+                if selected_sheet:
+                    log.info(f"Чтение Excel-файла с листа {selected_sheet}")
+                    df = pd.read_excel(excel_file_path, sheet_name=selected_sheet, engine='openpyxl')
+                    
+                    # Сохраняем лист во временный файл
+                    temp_file_with_sheet = os.path.join(output_folder, f"temp_sheet_{timestamp}.xlsx")
+                    df.to_excel(temp_file_with_sheet, index=False)
+                    log.info(f"Сохранен временный файл с выбранным листом: {temp_file_with_sheet}")
+                    
+                    # Используем этот файл вместо оригинального
+                    excel_file_path = temp_file_with_sheet
                 
-            # Сохраняем путь к выходному файлу
-            st.session_state.output_file_path = result_file_path
-            
-            # Формируем сообщение об успешной обработке
-            success_msg = f"Обработка успешно завершена. Файл готов к скачиванию."
-            log.info(success_msg)
-            add_log_message(success_msg, "SUCCESS")
-            st.session_state.processing_result = success_msg
-            
-            log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
-            return True
-            
-        except Exception as e:
-            error_msg = f"Ошибка при обработке файла: {str(e)}"
-            log.error(error_msg)
-            log.exception("Детали ошибки:")
-            add_log_message(error_msg, "ERROR")
-            st.session_state.processing_error = error_msg
-            log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА С ОШИБКОЙ =====================")
-            return False
+                log.info("Вызываем process_excel_file с аргументами:")
+                log.info(f"- excel_file_path={excel_file_path}")
+                log.info(f"- article_column={article_column}")
+                log.info(f"- image_column={image_column}")
+                log.info(f"- image_folder={images_folder}")
+                log.info(f"- output_folder={output_folder}")
+                
+                add_log_message("Запуск обработки файла...", "INFO")
+                
+                # Вызываем функцию обработки и блокируем изменения интерфейса
+                # Распаковываем результат функции process_excel_file
+                result_file_path, result_df, images_inserted = process_excel_file(
+                    file_path=excel_file_path,
+                    article_column=article_column,
+                    image_folder=images_folder,
+                    image_column_name=image_column,
+                    output_folder=output_folder,
+                    # Передаем настройки форматирования
+                    adjust_cell_size=config_manager.get_setting("excel_settings.adjust_cell_size", False),
+                    column_width=config_manager.get_setting("excel_settings.column_width", 150),
+                    row_height=config_manager.get_setting("excel_settings.row_height", 120),
+                    # Передаем лимит размера файла
+                    max_file_size_mb=config_manager.get_setting('excel_settings.max_file_size_mb', 50) 
+                )
+                
+                log.info(f"Файл успешно обработан: {result_file_path}")
+                log.info(f"Вставлено изображений: {images_inserted}")
+                
+                add_log_message(f"Обработка завершена. Вставлено изображений: {images_inserted}", "SUCCESS")
+                
+                # Проверяем, что результирующий файл создан
+                if not os.path.exists(result_file_path):
+                    error_msg = "Выходной файл не был создан, хотя ошибок не возникло"
+                    log.error(error_msg)
+                    add_log_message(error_msg, "ERROR")
+                    st.session_state.processing_error = error_msg
+                    return False
+                    
+                # Сохраняем путь к выходному файлу
+                st.session_state.output_file_path = result_file_path
+                
+                # Формируем сообщение об успешной обработке
+                success_msg = f"Обработка успешно завершена. Файл готов к скачиванию."
+                log.info(success_msg)
+                add_log_message(success_msg, "SUCCESS")
+                st.session_state.processing_result = success_msg
+                
+                log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
+                return True
+                
+            except Exception as e:
+                error_msg = f"Ошибка при обработке файла: {str(e)}"
+                log.error(error_msg)
+                log.exception("Детали ошибки:")
+                add_log_message(error_msg, "ERROR")
+                st.session_state.processing_error = error_msg
+                log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА С ОШИБКОЙ =====================")
+                return False
             
     except Exception as e:
         error_msg = f"Ошибка в процессе обработки: {str(e)}"
@@ -1265,91 +1444,112 @@ def show_custom_settings(key_prefix="", use_expanders=True):
     """
     # Функция для отображения настроек путей
     def show_paths_settings():
-        # Папка с изображениями
-        images_folder = st.text_input(
-            "Папка с изображениями",
-            value=config_manager.get_setting("paths.images_folder_path", ""),
-            help="Укажите путь к папке, где находятся изображения для вставки",
-            key=f"{key_prefix}images_folder_input"
-        )
+        """Отображение настроек путей"""
+        st.subheader("Настройки путей")
         
-        if images_folder:
-            # Проверяем, существует ли папка
-            if not os.path.exists(images_folder):
-                st.warning(f"Папка {images_folder} не существует!")
-            else:
-                st.success(f"Папка с изображениями: {images_folder}")
-                # Подсчитываем количество изображений в папке
-                image_files = [f for f in os.listdir(images_folder) 
-                              if os.path.isfile(os.path.join(images_folder, f)) and 
-                              f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
-                st.info(f"Найдено {len(image_files)} изображений в папке")
+        # Получаем текущие значения из конфига
+        config_manager = st.session_state.config_manager
+        current_image_folder = config_manager.get_setting('paths.images_folder_path')
+        current_output_folder = config_manager.get_setting('paths.output_folder_path')
+        
+        # Добавляем пояснение
+        st.markdown("### Пути к папкам")
+        st.markdown("Укажите пути к папкам для работы с файлами. Эти пути будут сохранены для последующих сессий.")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Отображаем текстовое поле для пути к папке с изображениями
+            image_folder = st.text_input(
+                "Путь к папке с изображениями",
+                value=current_image_folder,
+                help="Укажите путь к папке, где хранятся изображения товаров"
+            )
             
-            # Сохраняем путь в настройках
-            config_manager.set_setting("paths.images_folder_path", images_folder)
+            # Если путь изменился, сохраняем его в конфиг
+            if image_folder != current_image_folder:
+                config_manager.set_setting('paths.images_folder_path', image_folder)
+                config_manager.save_settings("Default")
+                log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
+        
+        with col2:
+            # Отображаем текстовое поле для пути к папке результатов
+            output_folder = st.text_input(
+                "Путь к папке результатов",
+                value=current_output_folder,
+                help="Укажите путь к папке, куда будут сохраняться обработанные файлы"
+            )
+            
+            # Если путь изменился, сохраняем его в конфиг
+            if output_folder != current_output_folder:
+                config_manager.set_setting('paths.output_folder_path', output_folder)
+                config_manager.save_settings("Default")
+                log.info(f"Сохранен новый путь к папке результатов: {output_folder}")
+            
+        # Добавляем кнопку сброса путей к значениям по умолчанию
+        if st.button("Сбросить пути к значениям по умолчанию"):
+            downloads_folder = get_downloads_folder()
+            config_manager.set_setting('paths.images_folder_path', downloads_folder)
+            config_manager.set_setting('paths.output_folder_path', downloads_folder)
+            config_manager.save_settings("Default")
+            st.success(f"Пути сброшены на папку загрузок: {downloads_folder}")
+            log.info(f"Пути сброшены на папку загрузок: {downloads_folder}")
     
     # Функция для отображения настроек изображений
     def show_image_settings():
-        # Максимальный размер файла изображения
+        """Отображение настроек изображений"""
+        st.subheader("Настройки изображений")
+        
+        # Получаем текущие значения из конфига
+        config_manager = st.session_state.config_manager
+        
+        # Максимальный размер Excel-файла
+        st.markdown("### Ограничение размера файла")
+        st.markdown("""
+        Укажите максимальный размер результирующего Excel-файла в мегабайтах.
+        Изображения будут автоматически оптимизированы, чтобы общий размер файла не превышал указанное значение.
+        """)
+        
         max_file_size_mb = st.number_input(
-            "Максимальный размер файла (МБ)",
+            "Максимальный размер Excel-файла (МБ)",
             min_value=1,
-            max_value=50,
-            value=config_manager.get_setting("image_settings.max_file_size_mb", 20),
-            help="Максимально допустимый размер файла изображения в мегабайтах",
-            key=f"{key_prefix}max_file_size_input",
-            label_visibility="visible"
+            max_value=100,
+            value=int(config_manager.get_setting('excel_settings.max_file_size_mb', 20)),
+            help="Максимальный размер результирующего Excel-файла в мегабайтах"
         )
-        config_manager.set_setting("image_settings.max_file_size_mb", int(max_file_size_mb))
         
-        # Настройка изменения размера ячейки
-        adjust_cell_size = st.checkbox(
-            "Изменить размер ячейки",
-            value=config_manager.get_setting("excel_settings.adjust_cell_size", False),
-            help="Если включено, размеры ячеек будут изменены для лучшего отображения изображений",
-            key=f"{key_prefix}adjust_cell_size_input",
-            label_visibility="visible"
-        )
-        config_manager.set_setting("excel_settings.adjust_cell_size", adjust_cell_size)
+        if max_file_size_mb != config_manager.get_setting('excel_settings.max_file_size_mb'):
+            config_manager.set_setting('excel_settings.max_file_size_mb', max_file_size_mb)
+            config_manager.save_settings("Default")
+            log.info(f"Установлен максимальный размер Excel-файла: {max_file_size_mb} МБ")
         
-        # Показываем настройки размеров только если включено изменение размера ячейки
-        if adjust_cell_size:
-            col1, col2 = st.columns(2)
-            
-            # Ширина колонки
-            column_width = col1.number_input(
-                "Ширина колонки (пикс.)",
-                min_value=50,
-                max_value=500,
-                value=config_manager.get_setting("excel_settings.column_width", 150),
-                help="Желаемая ширина колонки с изображениями в пикселях",
-                key=f"{key_prefix}column_width_input",
-                label_visibility="visible"
-            )
-            config_manager.set_setting("excel_settings.column_width", int(column_width))
-            
-            # Высота строки
-            row_height = col2.number_input(
-                "Высота строки (пикс.)",
-                min_value=30,
-                max_value=500,
-                value=config_manager.get_setting("excel_settings.row_height", 120),
-                help="Желаемая высота строки с изображениями в пикселях",
-                key=f"{key_prefix}row_height_input",
-                label_visibility="visible"
-            )
-            config_manager.set_setting("excel_settings.row_height", int(row_height))
-            
-        # Начальная строка
-        start_row = st.number_input(
-            "Начальная строка",
+        # Качество изображения
+        st.markdown("### Качество изображений")
+        st.markdown("""
+        Укажите качество сжатия изображений (от 1 до 100).
+        Большее значение даёт лучшее качество, но увеличивает размер файла.
+        """)
+        
+        quality = st.slider(
+            "Качество изображений",
             min_value=1,
-            value=config_manager.get_setting("excel_settings.start_row", 1),
-            help="Номер строки, с которой начнется обработка (по умолчанию с первой строки)",
-            key=f"{key_prefix}start_row_input",
-            label_visibility="visible"
+            max_value=100,
+            value=int(config_manager.get_setting('image_settings.quality', 80)),
+            help="Качество сжатия изображений (от 1 до 100)"
         )
-        config_manager.set_setting("excel_settings.start_row", int(start_row))
+        
+        if quality != config_manager.get_setting('image_settings.quality'):
+            config_manager.set_setting('image_settings.quality', quality)
+            config_manager.save_settings("Default")
+            log.info(f"Установлено качество изображений: {quality}")
+        
+        # Добавляем кнопку сброса настроек к значениям по умолчанию
+        if st.button("Сбросить настройки изображений"):
+            config_manager.set_setting('excel_settings.max_file_size_mb', 20)
+            config_manager.set_setting('image_settings.quality', 80)
+            config_manager.save_settings("Default")
+            st.success("Настройки изображений сброшены к значениям по умолчанию")
+            log.info("Настройки изображений сброшены к значениям по умолчанию")
     
     # Используем expanders если разрешено, иначе просто показываем заголовки
     if use_expanders:
@@ -1367,6 +1567,14 @@ def show_custom_settings(key_prefix="", use_expanders=True):
         
         st.subheader("Настройки изображений")
         show_image_settings()
+
+# Функция для запуска процесса обработки через состояние сессии
+def trigger_processing():
+    """
+    Устанавливает флаг для запуска обработки через session_state
+    """
+    log.info("Установка флага запуска обработки")
+    st.session_state.start_processing = True
 
 # Главная функция приложения
 def main():
@@ -1396,12 +1604,13 @@ def main():
     # Боковая панель с настройками
     with st.sidebar:
         st.header("Настройки")
-        settings_tab()
+        show_settings() # Показываем настройки путей, размера файла и форматирования
+        update_sidebar_buttons() # Кнопка сброса настроек
     
-    # Главный раздел приложения
+    # Главный раздел приложения - переносим загрузчик сюда
     file_uploader_section()
-    
-    # Проверка и обновление изображений в папке (если необходимо)
+        
+    # Проверка и обновление изображений в папке (если необходимо) - ОСТАВЛЯЕМ ЗДЕСЬ, т.к. не UI
     settings = config_manager.get_config_manager().current_settings
     if settings and settings.get("check_images_on_startup", False):
         check_new_images_in_folder()
