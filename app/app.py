@@ -146,8 +146,21 @@ def ensure_temp_dir(prefix: str = "") -> str:
     Returns:
         Путь к временной директории
     """
-    temp_dir = os.path.join(tempfile.gettempdir(), f"{prefix}excelwithimages")
-    os.makedirs(temp_dir, exist_ok=True)
+    # Создаем временную директорию в папке проекта для лучшего доступа
+    project_dir = os.path.dirname(os.path.dirname(__file__))
+    temp_dir = os.path.join(project_dir, "temp")
+    
+    # Создаем директорию, если она не существует
+    try:
+        os.makedirs(temp_dir, exist_ok=True)
+        log.info(f"Создана/проверена временная директория: {temp_dir}")
+    except Exception as e:
+        log.error(f"Ошибка при создании временной директории {temp_dir}: {e}")
+        # Если не удалось создать в проекте, используем системную временную директорию
+        temp_dir = os.path.join(tempfile.gettempdir(), f"{prefix}excelwithimages")
+        os.makedirs(temp_dir, exist_ok=True)
+        log.info(f"Использована системная временная директория: {temp_dir}")
+    
     return temp_dir
 
 # Функция для очистки временных файлов
@@ -162,10 +175,16 @@ def cleanup_temp_files():
         # Определяем путь к временной директории
         temp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'temp')
         if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir, exist_ok=True)
+            log.info(f"Создана временная директория: {temp_dir}")
             return
             
+        # Только для отладки: выводим список всех файлов в временной директории
+        all_files = os.listdir(temp_dir)
+        log.info(f"Найдено {len(all_files)} файлов в директории {temp_dir}: {all_files}")
+            
         # Удаляем все файлы, кроме текущего
-        for filename in os.listdir(temp_dir):
+        for filename in all_files:
             file_path = os.path.join(temp_dir, filename)
             if os.path.isfile(file_path) and file_path != current_temp_file:
                 try:
@@ -355,437 +374,521 @@ def show_table_preview(df):
         st.write("**Первые 5 строк:**")
         st.dataframe(df.head(), use_container_width=True)
 
+# Функция для загрузки Excel файла
+def load_excel_file():
+    """
+    Загружает Excel файл, определяет доступные листы и загружает выбранный лист.
+    """
+    try:
+        uploaded_file = st.session_state.get('uploaded_file', None)
+        if uploaded_file is None:
+            st.session_state.df = None
+            st.session_state.processing_error = None
+            st.session_state.temp_file_path = None
+            st.session_state.available_sheets = []
+            st.session_state.selected_sheet = None
+            return
+
+        # Сохраняем загруженный файл во временную директорию
+        temp_dir = ensure_temp_dir()
+        temp_file_path = os.path.join(temp_dir, uploaded_file.name)
+        
+        with open(temp_file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        
+        log.info(f"Файл {uploaded_file.name} успешно сохранен: {temp_file_path}")
+        st.session_state.temp_file_path = temp_file_path
+        
+        # Получаем опции загрузки из session_state
+        skiprows = st.session_state.get('skiprows', 0)
+        header_row = st.session_state.get('header_row', 0)
+        log.info(f"Загрузка с параметрами: skiprows={skiprows}, header_row={header_row}")
+        
+        # Получаем список доступных листов
+        try:
+            with pd.ExcelFile(temp_file_path) as xls:
+                available_sheets = xls.sheet_names
+                log.info(f"Доступные листы в файле: {available_sheets}")
+                
+                if not available_sheets:
+                    error_msg = "Excel-файл не содержит листов"
+                    log.warning(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                    st.session_state.available_sheets = []
+                    return
+                
+                st.session_state.available_sheets = available_sheets
+                
+                # Если лист не выбран или выбранный лист отсутствует в списке, выбираем первый
+                if (st.session_state.selected_sheet is None or 
+                    st.session_state.selected_sheet not in available_sheets):
+                    st.session_state.selected_sheet = available_sheets[0]
+                    
+                # Загружаем выбранный лист
+                selected_sheet = st.session_state.selected_sheet
+                log.info(f"Загрузка листа: {selected_sheet}")
+                
+                try:
+                    # Пробуем прочитать с явным указанием движка и параметров
+                    df = pd.read_excel(
+                        temp_file_path, 
+                        sheet_name=selected_sheet, 
+                        engine='openpyxl',
+                        skiprows=skiprows,
+                        header=header_row
+                    )
+                    
+                    # Проверка на пустой DataFrame
+                    log.info(f"Размер данных: строк={df.shape[0]}, колонок={df.shape[1]}; пустой={df.empty}")
+                    
+                    if df.empty:
+                        error_msg = f"Лист '{selected_sheet}' не содержит данных"
+                        log.warning(error_msg)
+                        st.session_state.processing_error = error_msg
+                        st.session_state.df = None
+                        return
+                    
+                    if df.shape[0] == 0:
+                        error_msg = f"Лист '{selected_sheet}' не содержит строк с данными"
+                        log.warning(error_msg)
+                        st.session_state.processing_error = error_msg
+                        st.session_state.df = None
+                        return
+                        
+                    if df.shape[1] == 0:
+                        error_msg = f"Лист '{selected_sheet}' не содержит колонок с данными"
+                        log.warning(error_msg)
+                        st.session_state.processing_error = error_msg
+                        st.session_state.df = None
+                        return
+                    
+                    # Проверка на файл, который имеет колонки, но все значения в них NaN
+                    if df.notna().sum().sum() == 0:
+                        error_msg = f"Лист '{selected_sheet}' содержит только пустые ячейки"
+                        log.warning(error_msg)
+                        st.session_state.processing_error = error_msg
+                        st.session_state.df = None
+                        return
+                    
+                    # Все хорошо, сохраняем DataFrame
+                    st.session_state.df = df
+                    st.session_state.processing_error = None
+                    log.info(f"Файл успешно загружен. Найдено {len(df)} строк и {len(df.columns)} колонок")
+                
+                except Exception as sheet_error:
+                    error_msg = f"Ошибка при чтении листа '{selected_sheet}': {str(sheet_error)}"
+                    log.error(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                
+        except Exception as e:
+            error_msg = f"Ошибка при чтении файла Excel: {str(e)}"
+            log.error(error_msg)
+            st.session_state.processing_error = error_msg
+            st.session_state.df = None
+            
+    except Exception as e:
+        error_msg = f"Ошибка при загрузке файла: {str(e)}"
+        log.error(error_msg)
+        st.session_state.processing_error = error_msg
+        st.session_state.df = None
+
+# Проверка валидности всех входных данных перед обработкой
+def all_inputs_valid():
+    """
+    Проверяет, что все необходимые данные для обработки заполнены и валидны.
+    
+    Returns:
+        bool: True, если все входные данные валидны, иначе False
+    """
+    # Подробная проверка с логированием
+    valid = True
+    log_msgs = []
+    
+    # Проверяем наличие DataFrame
+    if st.session_state.df is None:
+        log_msgs.append("DataFrame не загружен")
+        valid = False
+    else:
+        log_msgs.append(f"DataFrame загружен, размер: {st.session_state.df.shape}")
+        
+    # Проверяем, выбран ли лист в Excel
+    if st.session_state.selected_sheet is None:
+        log_msgs.append("Лист Excel не выбран")
+        valid = False
+    else:
+        log_msgs.append(f"Выбран лист: {st.session_state.selected_sheet}")
+        
+    # Проверяем, указана ли папка с изображениями
+    images_folder = config_manager.get_setting("paths.images_folder_path", "")
+    if not images_folder:
+        log_msgs.append("Не указана папка с изображениями")
+        valid = False
+    elif not os.path.isdir(images_folder):
+        log_msgs.append(f"Указанная папка с изображениями не существует: {images_folder}")
+        valid = False
+    else:
+        # Получаем количество изображений в папке
+        image_files = [f for f in os.listdir(images_folder) 
+                      if os.path.isfile(os.path.join(images_folder, f)) and 
+                      f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
+        log_msgs.append(f"Папка с изображениями: {images_folder}, найдено {len(image_files)} изображений")
+        
+    # Проверяем колонки
+    article_column = st.session_state.get("article_column")
+    image_column = st.session_state.get("image_column")
+    
+    if not article_column:
+        log_msgs.append("Не выбрана колонка с артикулами")
+        valid = False
+    else:
+        log_msgs.append(f"Выбрана колонка с артикулами: {article_column}")
+        
+    if not image_column:
+        log_msgs.append("Не выбрана колонка с изображениями")
+        valid = False
+    else:
+        log_msgs.append(f"Выбрана колонка с изображениями: {image_column}")
+        
+    if article_column and image_column and article_column == image_column:
+        log_msgs.append("Колонки с артикулами и изображениями не могут быть одинаковыми")
+        valid = False
+        
+    # Проверяем временный файл
+    if not st.session_state.temp_file_path:
+        log_msgs.append("Временный файл не создан")
+        valid = False
+    elif not os.path.exists(st.session_state.temp_file_path):
+        log_msgs.append(f"Временный файл не существует: {st.session_state.temp_file_path}")
+        valid = False
+    else:
+        log_msgs.append(f"Временный файл доступен: {st.session_state.temp_file_path}")
+    
+    # Логируем результаты проверки
+    for msg in log_msgs:
+        log.info(f"Проверка: {msg}")
+    
+    log.info(f"Все условия выполнены: {valid}")
+    return valid
+
+# Функция для обработки изменения выбранного листа
+def handle_sheet_change():
+    """
+    Обрабатывает изменение выбранного листа Excel и перезагружает данные.
+    """
+    if st.session_state.get("sheet_selector") != st.session_state.selected_sheet:
+        st.session_state.selected_sheet = st.session_state.get("sheet_selector")
+        log.info(f"Выбран новый лист: {st.session_state.selected_sheet}")
+        
+        # Перезагружаем данные с нового листа
+        if st.session_state.temp_file_path and os.path.exists(st.session_state.temp_file_path):
+            try:
+                selected_sheet = st.session_state.selected_sheet
+                skiprows = st.session_state.get('skiprows', 0)
+                header_row = st.session_state.get('header_row', 0)
+                
+                df = pd.read_excel(
+                    st.session_state.temp_file_path, 
+                    sheet_name=selected_sheet, 
+                    engine='openpyxl',
+                    skiprows=skiprows,
+                    header=header_row
+                )
+                
+                # Проверка на пустой DataFrame
+                log.info(f"Размер данных при смене листа: строк={df.shape[0]}, колонок={df.shape[1]}; пустой={df.empty}")
+                
+                if df.empty:
+                    error_msg = f"Лист '{selected_sheet}' не содержит данных"
+                    log.warning(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                    return
+                
+                if df.shape[0] == 0:
+                    error_msg = f"Лист '{selected_sheet}' не содержит строк с данными"
+                    log.warning(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                    return
+                    
+                if df.shape[1] == 0:
+                    error_msg = f"Лист '{selected_sheet}' не содержит колонок с данными"
+                    log.warning(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                    return
+                
+                # Проверка на файл, который имеет колонки, но все значения в них NaN
+                if df.notna().sum().sum() == 0:
+                    error_msg = f"Лист '{selected_sheet}' содержит только пустые ячейки"
+                    log.warning(error_msg)
+                    st.session_state.processing_error = error_msg
+                    st.session_state.df = None
+                    return
+                
+                # Все хорошо, сохраняем DataFrame
+                st.session_state.df = df
+                st.session_state.processing_error = None
+                log.info(f"Лист '{selected_sheet}' успешно загружен. Найдено {len(df)} строк и {len(df.columns)} колонок")
+                
+            except Exception as e:
+                error_msg = f"Ошибка при загрузке листа '{st.session_state.selected_sheet}': {str(e)}"
+                log.error(error_msg)
+                st.session_state.processing_error = error_msg
+                st.session_state.df = None
+
 # Функция для загрузки файла Excel
 def file_uploader_section():
     """
-    Раздел для загрузки файлов.
+    Раздел для загрузки файлов и настройки параметров обработки.
     """
-    # Проверяем, нужна ли перезагрузка после смены листа
-    if st.session_state.get('force_rerun', False):
-        st.session_state.force_rerun = False
-        
-    # CSS стили для кнопок и элементов интерфейса
+    # CSS стили для кнопок и сообщений
     st.markdown("""
     <style>
-    /* Удаляем красную рамку вокруг file uploader */
-    .stFileUploader {
-        border: none !important;
-    }
-    
-    /* Большая зеленая кнопка */
-    .big-green-button {
-        background-color: #4CAF50;
-        color: white;
-        padding: 15px 25px;
-        font-size: 18px;
-        font-weight: bold;
-        border-radius: 8px;
-        border: none;
-        cursor: pointer;
-        width: 100%;
-        text-align: center;
+    /* Стили для большой зеленой кнопки */
+    .big-button-container {
+        display: flex;
+        justify-content: center;
         margin: 20px 0;
-        transition: all 0.3s;
     }
     
-    .big-green-button:hover {
-        background-color: #3e8e41;
-    }
-    
-    /* Неактивная кнопка */
-    .inactive-button {
-        background-color: white;
-        color: #4CAF50;
-        padding: 12px 20px;
-        font-size: 16px;
+    /* Стиль для сообщений об ошибках */
+    .error-message {
+        color: #cc0000;
+        background-color: #ffeeee;
+        padding: 10px;
         border-radius: 5px;
-        border: 2px solid #4CAF50;
-        cursor: not-allowed;
-        width: 100%;
-        text-align: center;
+        border-left: 5px solid #cc0000;
         margin: 10px 0;
+    }
+    
+    /* Стиль для индикатора количества строк */
+    .row-count {
+        font-weight: bold;
+        color: #1f77b4;
+    }
+    
+    /* Стили для улучшения внешнего вида загрузчика файлов */
+    div[data-testid="stFileUploader"] {
+        border: 1px dashed #cccccc;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f8f9fa;
+    }
+    
+    div[data-testid="stFileUploader"]:hover {
+        border-color: #4CAF50;
+        background-color: #f0f9f0;
     }
     </style>
     """, unsafe_allow_html=True)
     
-    # Инициализация переменных session_state если они не существуют
-    # Не инициализируем uploaded_file, так как Streamlit управляет им сам
-    if 'df' not in st.session_state:
-        st.session_state.df = None
-    if 'temp_file_path' not in st.session_state:
-        st.session_state.temp_file_path = None
-    if 'processing_result' not in st.session_state:
-        st.session_state.processing_result = None
-    if 'processing_error' not in st.session_state:
-        st.session_state.processing_error = None
-    if 'is_processing' not in st.session_state:
-        st.session_state.is_processing = False
-    if 'output_file_path' not in st.session_state:
-        st.session_state.output_file_path = None
-    if 'selected_sheet' not in st.session_state:
-        st.session_state.selected_sheet = None
-    if 'available_sheets' not in st.session_state:
-        st.session_state.available_sheets = []
+    # Стили для кнопок
+    big_green_button_style = """
+        background-color: #4CAF50;
+        color: white;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: pointer;
+        border-radius: 8px;
+        border: none;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+        transition: 0.3s;
+    """
     
-    def load_excel_file():
-        """Загрузка Excel файла и создание DataFrame"""
-        # Используем uploaded_file непосредственно из функции, а не из session_state
-        uploaded_file = st.session_state.uploaded_file
-        if uploaded_file is not None:
-            # Создаем временную директорию, если она не существует
-            temp_dir = os.path.join(os.getcwd(), "temp")
-            os.makedirs(temp_dir, exist_ok=True)
-            
-            # Сохраняем файл во временной директории
-            file_extension = os.path.splitext(uploaded_file.name)[1]
-            temp_file_path = os.path.join(temp_dir, f"temp_file_{int(time.time())}{file_extension}")
-            
-            with open(temp_file_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
-            
-            # Получаем список листов в Excel файле
-            try:
-                excel = pd.ExcelFile(temp_file_path)
-                st.session_state.available_sheets = excel.sheet_names
-                
-                # Если есть только один лист, выбираем его автоматически
-                if len(st.session_state.available_sheets) == 1:
-                    st.session_state.selected_sheet = st.session_state.available_sheets[0]
-                else:
-                    # Если лист не выбран, выберем первый
-                    if 'selected_sheet' not in st.session_state or not st.session_state.selected_sheet:
-                        st.session_state.selected_sheet = st.session_state.available_sheets[0]
-                
-                # Читаем Excel файл с выбранным листом
-                df = pd.read_excel(temp_file_path, sheet_name=st.session_state.selected_sheet)
-                
-                # Проверяем, есть ли у столбцов имена и если нет - создаем имена по буквам (A, B, C, ...)
-                # Преобразуем все колонки к строковому типу для безопасного использования str.contains
-                renamed_columns = False
-                
-                # Получаем список столбцов, которые нужно переименовать
-                unnamed_cols = []
-                for i, col in enumerate(df.columns):
-                    col_str = str(col)
-                    if 'Unnamed:' in col_str or pd.isna(col):
-                        unnamed_cols.append(i)
-                
-                # Если есть столбцы без имен, переименовываем их
-                if unnamed_cols:
-                    # Создаем новые имена для столбцов
-                    new_columns = list(df.columns)
-                    for i in unnamed_cols:
-                        new_columns[i] = get_column_letter(i+1)  # A, B, C, ...
-                    
-                    df.columns = new_columns
-                    renamed_columns = True
-                    log.info(f"Renamed columns without headers: {[get_column_letter(i+1) for i in unnamed_cols]}")
-                
-                st.session_state.df = df
-                st.session_state.temp_file_path = temp_file_path
-                st.session_state.processing_error = None
-                
-                # Сбрасываем выбранные колонки при загрузке нового файла
-                if 'article_column' in st.session_state:
-                    del st.session_state.article_column
-                if 'image_column' in st.session_state:
-                    del st.session_state.image_column
-                
-                log.info(f"File {uploaded_file.name} loaded successfully. Sheets found: {len(st.session_state.available_sheets)}")
-                return True
-            except Exception as e:
-                st.session_state.processing_error = f"Error reading file: {str(e)}"
-                log.error(f"Error reading file: {str(e)}")
-                return False
-        return False
+    inactive_button_style = """
+        background-color: #cccccc;
+        color: #666666;
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        margin: 4px 2px;
+        cursor: not-allowed;
+        border-radius: 8px;
+        border: none;
+        box-shadow: none;
+    """
     
-    def select_sheet():
-        """Обработчик выбора листа Excel"""
-        if st.session_state.temp_file_path and st.session_state.selected_sheet:
-            try:
-                # Используем тот же код, что и в load_excel_file, чтобы правильно обработать столбцы
-                df = pd.read_excel(st.session_state.temp_file_path, sheet_name=st.session_state.selected_sheet)
+    # Загрузка файла и инициализация обработки
+    uploaded_file = st.file_uploader("Выберите Excel файл для обработки", type=["xlsx", "xls"], key="uploaded_file", 
+                                     on_change=load_excel_file)
+
+    # Отображение информации о загруженном файле
+    if uploaded_file is not None:
+        st.write(f"**Загружен файл:** {uploaded_file.name}")
+        
+        # Настройки загрузки Excel
+        with st.expander("Настройки загрузки Excel", expanded=False):
+            st.markdown("#### Параметры загрузки Excel")
+            st.write("Настройте параметры чтения файла, если в нем есть метаданные или особый формат.")
+            
+            # Инициализация переменных
+            if 'skiprows' not in st.session_state:
+                st.session_state.skiprows = 0
+            if 'header_row' not in st.session_state:
+                st.session_state.header_row = 0
                 
-                # Преобразуем все колонки к строковому типу для безопасного использования str.contains
-                renamed_columns = False
-                
-                # Получаем список столбцов, которые нужно переименовать
-                unnamed_cols = []
-                for i, col in enumerate(df.columns):
-                    col_str = str(col)
-                    if 'Unnamed:' in col_str or pd.isna(col):
-                        unnamed_cols.append(i)
-                
-                # Если есть столбцы без имен, переименовываем их
-                if unnamed_cols:
-                    # Создаем новые имена для столбцов
-                    new_columns = list(df.columns)
-                    for i in unnamed_cols:
-                        new_columns[i] = get_column_letter(i+1)  # A, B, C, ...
-                    
-                    df.columns = new_columns
-                    renamed_columns = True
-                    log.info(f"Renamed columns without headers: {[get_column_letter(i+1) for i in unnamed_cols]}")
-                
-                st.session_state.df = df
-                
-                # Не сбрасываем выбранные колонки при смене листа
-                # Оставляем текущие настройки как есть
-                
-                log.info(f"Selected sheet: {st.session_state.selected_sheet}")
-                
-                # Принудительно делаем rerun для обновления интерфейса
-                # Устанавливаем флаг, что нужно перезагрузить страницу
-                st.session_state.force_rerun = True
-                st.session_state.needs_rerun = True
-            except Exception as e:
-                st.session_state.processing_error = f"Error reading sheet: {str(e)}"
-                log.error(f"Error reading sheet: {str(e)}")
-    
-    def all_inputs_valid():
-        """Проверка валидности всех входных данных"""
-        # Проверяем наличие DataFrame
-        if st.session_state.df is None:
-            return False
-            
-        # Проверяем выбранные колонки
-        if 'article_column_letter' not in st.session_state or not st.session_state.article_column_letter:
-            return False
-            
-        # Проверяем папку с изображениями
-        image_folder = config_manager.get_setting("paths.images_folder_path", "")
-        if image_folder == "" or not os.path.exists(image_folder):
-            return False
-            
-        return True
-    
-    # Загрузка файла - НЕ устанавливаем uploaded_file через session_state
-    uploaded_file = st.file_uploader("Загрузите Excel файл", type=["xlsx", "xls"], key="uploaded_file", on_change=load_excel_file)
-    
-    # Если файл загружен, показываем выбор листа
-    if uploaded_file is not None and st.session_state.available_sheets:
-        # Отображаем информацию о загруженном файле
-        st.success(f"Файл загружен: {uploaded_file.name}")
-        
-        # Выбор листа (если файл содержит несколько листов)
-        if len(st.session_state.available_sheets) > 1:
-            st.selectbox(
-                "Выберите лист Excel",
-                options=st.session_state.available_sheets,
-                key="selected_sheet",
-                on_change=select_sheet
-            )
-        else:
-            st.info(f"Выбран лист: {st.session_state.selected_sheet}")
-    
-    # Если DataFrame загружен, показываем форму для настройки обработки
-    if st.session_state.df is not None:
-        df = st.session_state.df
-        
-        # Отображаем информацию о данных
-        st.write(f"Количество строк: {len(df)} | Количество колонок: {len(df.columns)}")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Поле ввода для колонки с артикулами
-            st.text_input(
-                "Введите букву колонки с артикулами (A, B, C, ...)", 
-                value="A",
-                key="article_column_letter", 
-                help="Укажите букву колонки, в которой находятся артикулы"
-            )
-            
-            # Устанавливаем имя колонки в session_state
-            if 'article_column_letter' in st.session_state and st.session_state.article_column_letter:
-                col_idx = excel_utils.column_letter_to_index(st.session_state.article_column_letter)
-                if col_idx < len(df.columns):
-                    st.session_state.article_column = df.columns[col_idx]
-        
-        with col2:
-            # Поле ввода для колонки с изображениями
-            st.text_input(
-                "Введите букву колонки для вставки изображений", 
-                value="B",
-                key="image_column_letter",
-                help="Укажите букву колонки, в которую будут вставлены изображения"
-            )
-            
-            # Устанавливаем имя колонки в session_state
-            if 'image_column_letter' in st.session_state and st.session_state.image_column_letter:
-                col_idx = excel_utils.column_letter_to_index(st.session_state.image_column_letter)
-                if col_idx < len(df.columns):
-                    st.session_state.image_column = df.columns[col_idx]
-            else:
-                st.session_state.image_column = ""
-        
-        # Отображаем текущие настройки, включая путь к изображениям
-        with st.expander("Текущие настройки обработки", expanded=True):
-            st.write("**Настройки данных:**")
-            st.write(f"- Выбранный лист: **{st.session_state.selected_sheet}**")
-            
-            # Отображаем буквенные обозначения колонок
-            article_column_letter = st.session_state.get('article_column_letter', 'A')
-            image_column_letter = st.session_state.get('image_column_letter', 'B')
-            
-            st.write(f"- Колонка с артикулами: **{article_column_letter}**")
-            st.write(f"- Колонка для вставки изображений: **{image_column_letter}**")
-            
-            st.write("**Настройки путей:**")
-            images_folder = config_manager.get_setting("paths.images_folder_path", "")
-            output_folder = config_manager.get_setting("paths.output_folder_path", "")
-            
-            if images_folder and os.path.exists(images_folder):
-                st.write(f"- Папка с изображениями: **{images_folder}** ✅")
-            else:
-                st.write("- Папка с изображениями: **Не указана или не существует** ❌")
-            
-            if output_folder:
-                if not os.path.exists(output_folder):
-                    st.write(f"- Папка для сохранения результата: **{output_folder}** ⚠️ (будет создана)")
-                else:
-                    st.write(f"- Папка для сохранения результата: **{output_folder}** ✅")
-        
-        # Отображение предпросмотра таблицы
-        show_table_preview(df)
-        
-        # Контейнер для кнопки и сообщений об ошибках
-        st.subheader("Запуск обработки")
-        
-        # Проверяем валидность данных для активации кнопки
-        button_enabled = all_inputs_valid()
-        
-        if not button_enabled:
-            # Выводим подсказку, что нужно сделать для активации кнопки
-            missing = []
-            if st.session_state.df is None:
-                missing.append("- Загрузите Excel файл")
-            if 'article_column_letter' not in st.session_state or not st.session_state.article_column_letter:
-                missing.append("- Введите букву колонки с артикулами")
-            if not config_manager.get_setting("paths.images_folder_path", "") or not os.path.exists(config_manager.get_setting("paths.images_folder_path", "")):
-                missing.append("- Укажите корректный путь к папке с изображениями в настройках")
-            
-            if missing:
-                st.warning("Для запуска обработки необходимо:\n" + "\n".join(missing))
-        
-        # Создаем кнопку с соответствующим классом
-        start_processing = st.button(
-            "ЗАПУСТИТЬ ОБРАБОТКУ ФАЙЛА", 
-            disabled=not button_enabled or st.session_state.is_processing,
-            key="start_processing_button", 
-            use_container_width=True,
-            type="primary" if button_enabled else "secondary"
-        )
-        
-        # Отображение сообщений об ошибках
-        if st.session_state.processing_error:
-            st.error(st.session_state.processing_error)
-        
-        # Отображение результатов обработки
-        if st.session_state.processing_result:
-            st.success(st.session_state.processing_result)
-            
-            if st.session_state.output_file_path and os.path.exists(st.session_state.output_file_path):
-                # Используем безопасный способ открытия файла
-                try:
-                    with open(st.session_state.output_file_path, "rb") as f:
-                        file_data = f.read()
-                    
-                    st.download_button(
-                        label="Скачать обработанный файл",
-                        data=file_data,
-                        file_name=os.path.basename(st.session_state.output_file_path),
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Ошибка при подготовке файла для скачивания: {str(e)}")
-        
-        # Обработка клика по кнопке
-        if start_processing and not st.session_state.is_processing:
-            st.session_state.is_processing = True
-            st.session_state.processing_result = None
-            st.session_state.processing_error = None
-            
-            try:
-                # Вызов функции обработки из основного модуля
-                # Используем корректные импорты
-                import sys
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                parent_dir = os.path.dirname(current_dir)
-                if parent_dir not in sys.path:
-                    sys.path.append(parent_dir)
-                
-                from core.processor import process_excel_file
-                
-                # Получаем фактические имена колонок из DataFrame
-                article_column = st.session_state.article_column_letter
-                image_column = st.session_state.image_column_letter
-                
-                output_file = process_excel_file(
-                    excel_file_path=st.session_state.temp_file_path,
-                    article_column=article_column,
-                    image_column=image_column,
-                    image_folder=config_manager.get_setting("paths.images_folder_path", ""),
-                    sheet_name=st.session_state.selected_sheet
+            # Колонки для настроек
+            col1, col2 = st.columns(2)
+            with col1:
+                skiprows = st.number_input(
+                    "Пропустить начальные строки", 
+                    min_value=0, 
+                    max_value=50, 
+                    value=st.session_state.skiprows,
+                    help="Укажите количество строк для пропуска в начале файла",
+                    key="excel_skiprows"
+                )
+            with col2:
+                header_row = st.number_input(
+                    "Строка с заголовками", 
+                    min_value=0, 
+                    max_value=50, 
+                    value=st.session_state.header_row,
+                    help="Укажите номер строки с заголовками колонок (0 = первая непропущенная строка)",
+                    key="excel_header_row"
                 )
                 
-                st.session_state.output_file_path = output_file
-                st.session_state.processing_result = f"Файл успешно обработан: {output_file}"
-                log.info(f"Обработка файла завершена успешно. Результат сохранен в: {output_file}")
-            except Exception as e:
-                error_msg = f"Ошибка при обработке файла: {str(e)}"
-                st.session_state.processing_error = error_msg
-                log.error(error_msg)
-            finally:
-                st.session_state.is_processing = False
-                # Устанавливаем флаг для перезагрузки страницы
-                st.session_state.needs_rerun = True
-    
-    # Добавляем окно логов
-    with st.expander("Logs", expanded=False):
-        # Получаем содержимое лог-файла
-        try:
-            if os.path.exists(log_file):
-                with open(log_file, 'r', encoding='utf-8') as f:
-                    logs = f.readlines()
-                    # Выводим только последние 50 строк логов
-                    log_text = "".join(logs[-50:])
-                    st.code(log_text, language="text")
+            # Если значения изменились, перезагружаем файл
+            if (skiprows != st.session_state.skiprows or 
+                header_row != st.session_state.header_row):
+                st.session_state.skiprows = skiprows
+                st.session_state.header_row = header_row
+                st.button("Применить настройки", on_click=load_excel_file)
+                
+        # Отображение ошибки обработки, если есть
+        if st.session_state.processing_error:
+            st.markdown(f"""
+            <div class="error-message">
+                <strong>Ошибка:</strong> {st.session_state.processing_error}
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Добавляем подсказку для решения проблемы с пустыми данными
+            if "не содержит данных" in st.session_state.processing_error or "содержит только пустые ячейки" in st.session_state.processing_error:
+                st.info("""
+                **Рекомендации по решению проблемы:**
+                
+                1. Убедитесь, что файл Excel содержит данные в выбранном листе
+                2. Проверьте наличие невидимых форматирований или скрытых строк
+                3. Попробуйте открыть файл в Excel и пересохранить его
+                4. Убедитесь, что данные начинаются с первой строки и колонки
+                """)
+            
+        # Если есть доступные листы, показываем селектор листов
+        if st.session_state.available_sheets and len(st.session_state.available_sheets) > 0:
+            selected_sheet = st.selectbox(
+                "Выберите лист для обработки:",
+                st.session_state.available_sheets,
+                index=st.session_state.available_sheets.index(st.session_state.selected_sheet) if st.session_state.selected_sheet in st.session_state.available_sheets else 0,
+                key="sheet_selector",
+                on_change=handle_sheet_change
+            )
+            
+        # Если данные успешно загружены, показываем предпросмотр и селекторы колонок
+        if st.session_state.df is not None:
+            # Отображение размерности данных
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"""
+                <div class="row-count">
+                    Количество строк: {st.session_state.df.shape[0]}
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                st.write(f"**Количество колонок:** {st.session_state.df.shape[1]}")
+            
+            # Добавляем предпросмотр данных
+            with st.expander("Предпросмотр данных", expanded=False):
+                st.dataframe(st.session_state.df.head(10), use_container_width=True)
+                
+                # Добавляем статистику по колонкам
+                col_stats = pd.DataFrame({
+                    'Колонка': st.session_state.df.columns,
+                    'Тип данных': [str(dtype) for dtype in st.session_state.df.dtypes.values],
+                    'Непустых значений': st.session_state.df.count().values,
+                    'Процент заполнения': (st.session_state.df.count() / len(st.session_state.df) * 100).round(2).values
+                })
+                st.write("### Статистика по колонкам")
+                st.dataframe(col_stats, use_container_width=True)
+            
+            # Получение списка колонок
+            column_options = list(st.session_state.df.columns)
+            
+            # Если колонки есть, показываем селекторы
+            if column_options:
+                # Позволяем пользователю выбрать колонки для обработки
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.selectbox("Колонка с артикулами", 
+                                options=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+                                index=0,
+                                key="article_column")
+                with col2:
+                    st.selectbox("Колонка с изображениями", 
+                                options=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+                                index=1,
+                                key="image_column")
+                                
+                # Отображение текущих настроек и кнопка обработки
+                st.write("### Текущие настройки обработки")
+                with st.expander("Показать настройки", expanded=False):
+                    # Используем функцию показа настроек с пользовательским префиксом для ключей
+                    # и отключаем вложенные expanders
+                    show_custom_settings("uploader_", use_expanders=False)
+                    
+                # Проверка всех необходимых полей перед обработкой
+                process_button_disabled = not all_inputs_valid()
+                
+                # Показываем отладочную информацию об условиях обработки
+                with st.expander("Отладочная информация", expanded=False):
+                    st.write("**Проверка условий для обработки:**")
+                    st.write(f"- DataFrame загружен: {st.session_state.df is not None}")
+                    st.write(f"- Временный файл существует: {st.session_state.temp_file_path and os.path.exists(st.session_state.temp_file_path)}")
+                    st.write(f"- Выбран лист: {st.session_state.selected_sheet}")
+                    st.write(f"- Колонка с артикулами: {st.session_state.get('article_column')}")
+                    st.write(f"- Колонка с изображениями: {st.session_state.get('image_column')}")
+                    
+                    images_folder = config_manager.get_setting("paths.images_folder_path", "")
+                    st.write(f"- Папка изображений: {images_folder}")
+                    st.write(f"- Папка изображений существует: {os.path.exists(images_folder) if images_folder else False}")
+                    
+                    st.write(f"- Кнопка заблокирована: {process_button_disabled}")
+                
+                # Заменяем JavaScript-кнопку на стандартную кнопку Streamlit
+                if st.button("Обработать файл", disabled=process_button_disabled, type="primary"):
+                    with st.spinner("Обработка файла..."):
+                        st.session_state.is_processing = True
+                        success = process_files()
+                        if success:
+                            st.success("Файл успешно обработан!")
+                        else:
+                            st.error(f"Ошибка при обработке файла: {st.session_state.processing_error}")
+                
             else:
-                st.warning("Log file not found")
-        except Exception as e:
-            # Если возникает ошибка, пытаемся прочитать в двоичном режиме и декодировать с игнорированием ошибок
-            try:
-                with open(log_file, 'rb') as f:
-                    binary_logs = f.read()
-                    # Декодируем с игнорированием ошибок
-                    log_text = binary_logs.decode('utf-8', errors='replace')
-                    st.code(log_text[-5000:], language="text")
-                    st.warning("Log file is displayed with replacement characters for characters that could not be decoded")
-            except Exception as e2:
-                st.error(f"Error reading log file: {str(e2)}")
-
-# Функция для проверки готовности к обработке (все ли поля заполнены)
-def is_ready_for_processing():
-    # Проверяем, есть ли все необходимые настройки
-    input_file = config_manager.get_setting("paths.input_file_path", "")
-    output_folder = config_manager.get_setting("paths.output_folder_path", "")
-    images_folder = config_manager.get_setting("paths.images_folder_path", "")
-    
-    # Проверяем, загружен ли файл
-    if not input_file or not os.path.isfile(input_file):
-        return False
-    
-    # Проверяем, указана ли папка с изображениями
-    if not images_folder or not os.path.isdir(images_folder):
-        return False
-    
-    # Проверяем, указана ли выходная папка
-    if not output_folder:
-        return False
-    
-    return True
+                st.warning("Файл не содержит колонок для выбора. Проверьте структуру Excel-файла.")
+                
+    # Отображение результатов обработки
+    if st.session_state.processing_result:
+        st.success(st.session_state.processing_result)
+        
+    # Добавление кнопки скачивания, если файл был обработан
+    if st.session_state.output_file_path and os.path.exists(st.session_state.output_file_path):
+        with open(st.session_state.output_file_path, "rb") as file:
+            st.download_button(
+                label="Скачать обработанный файл",
+                data=file,
+                file_name=os.path.basename(st.session_state.output_file_path),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
 # Функция для обработки файла
 def process_files():
@@ -794,116 +897,141 @@ def process_files():
     Обрабатывает Excel файл и добавляет изображения к соответствующим артикулам.
     """
     try:
-        log.info("Начало обработки файлов")
-        st.session_state['is_processing'] = True
+        log.info("===================== НАЧАЛО ОБРАБОТКИ ФАЙЛА =====================")
+        st.session_state.is_processing = True
+        st.session_state.processing_result = None
+        st.session_state.processing_error = None
         
-        # Проверка наличия всех необходимых данных
-        if not all([
-            st.session_state.get('df') is not None,
-            st.session_state.get('excel_file_path'),
-            st.session_state.get('article_column'),
-            st.session_state.get('image_column'),
-            st.session_state.get('image_folder_path')
-        ]):
-            raise ValueError("Не все необходимые данные указаны для обработки")
+        # Получаем необходимые настройки
+        images_folder = config_manager.get_setting("paths.images_folder_path", "")
+        output_folder = config_manager.get_setting("paths.output_folder_path", get_downloads_folder())
+        
+        log.info(f"Папка изображений: {images_folder}")
+        log.info(f"Выходная папка: {output_folder}")
+        
+        # Детальная проверка всех условий
+        conditions = {
+            "DataFrame загружен": st.session_state.df is not None,
+            "Временный файл существует": st.session_state.temp_file_path is not None,
+            "Файл доступен": os.path.exists(st.session_state.temp_file_path) if st.session_state.temp_file_path else False,
+            "Выбран лист": st.session_state.selected_sheet is not None,
+            "Указана колонка с артикулами": st.session_state.get('article_column') is not None,
+            "Указана колонка с изображениями": st.session_state.get('image_column') is not None,
+            "Папка изображений указана": images_folder != "",
+            "Папка изображений существует": os.path.exists(images_folder) if images_folder else False
+        }
+        
+        # Логируем все условия
+        for condition, result in conditions.items():
+            log.info(f"Проверка: {condition} = {result}")
+        
+        # Проверяем все условия
+        all_conditions_met = all(conditions.values())
+        if not all_conditions_met:
+            failed_conditions = [cond for cond, result in conditions.items() if not result]
+            error_msg = f"Не выполнены следующие условия: {', '.join(failed_conditions)}"
+            log.error(error_msg)
+            st.session_state.processing_error = error_msg
+            st.session_state.is_processing = False
+            return False
             
-        # Получение параметров из состояния сессии
-        df = st.session_state['df'].copy()
-        excel_file_path = st.session_state['excel_file_path']
-        article_column = st.session_state['article_column']
-        image_column = st.session_state['image_column']
-        image_folder_path = st.session_state['image_folder_path']
+        # Получаем данные из session_state
+        excel_file_path = st.session_state.temp_file_path
+        article_column = st.session_state.get('article_column')
+        image_column = st.session_state.get('image_column')
+        selected_sheet = st.session_state.selected_sheet
         
-        # Создание временной директории для обработанных изображений
-        temp_dir = ensure_temp_dir(prefix="excel_images_")
-        log.info(f"Создана временная директория для обработанных изображений: {temp_dir}")
+        log.info(f"Параметры обработки:")
+        log.info(f"- Файл: {excel_file_path}")
+        log.info(f"- Лист: {selected_sheet}")
+        log.info(f"- Колонка с артикулами: {article_column}")
+        log.info(f"- Колонка с изображениями: {image_column}")
+        log.info(f"- Папка с изображениями: {images_folder}")
+        log.info(f"- Выходная папка: {output_folder}")
         
-        # Путь к результирующему файлу
-        result_filename = f"processed_{os.path.basename(excel_file_path)}"
-        result_file_path = os.path.join(temp_dir, result_filename)
-        
-        # Массив для хранения путей ко всем обработанным изображениям
-        processed_image_paths = []
-        total_rows = len(df)
-        
-        # Обработка каждой строки DataFrame
-        for idx, row in df.iterrows():
-            # Обновление прогресса
-            progress = (idx + 1) / total_rows
-            log.debug(f"Обработка строки {idx+1}/{total_rows} ({progress:.1%})")
-            
-            try:
-                # Получение и нормализация артикула
-                article = row[article_column]
-                if pd.isna(article):
-                    log.warning(f"Строка {idx+1}: артикул отсутствует, пропускаем")
-                    continue
-                    
-                normalized_article = image_utils.normalize_article_number(str(article))
-                
-                # Поиск изображений для артикула
-                image_paths = image_utils.find_images_by_article(image_folder_path, normalized_article)
-                
-                if not image_paths:
-                    log.warning(f"Для артикула {article} (нормализовано: {normalized_article}) изображения не найдены")
-                    continue
-                    
-                log.info(f"Для артикула {article} найдено {len(image_paths)} изображений")
-                
-                # Оптимизация изображений для Excel
-                processed_images = []
-                for img_path in image_paths:
-                    try:
-                        # Создание имени для обработанного изображения
-                        img_filename = f"{normalized_article}_{len(processed_images)}_{os.path.basename(img_path)}"
-                        processed_img_path = os.path.join(temp_dir, img_filename)
-                        
-                        # Оптимизация изображения
-                        image_utils.optimize_image_for_excel(img_path, processed_img_path)
-                        processed_images.append(processed_img_path)
-                        processed_image_paths.append(processed_img_path)
-                        
-                        log.debug(f"Изображение {img_path} обработано и сохранено как {processed_img_path}")
-                    except Exception as img_err:
-                        log.error(f"Ошибка при обработке изображения {img_path}: {img_err}")
-                
-                # Обновление DataFrame с путями к обработанным изображениям
-                if processed_images:
-                    df.at[idx, image_column] = ",".join(processed_images)
-            except Exception as row_err:
-                log.error(f"Ошибка при обработке строки {idx+1}: {row_err}")
-        
-        # Сохранение обработанного DataFrame в новый Excel файл
-        log.info(f"Сохранение результата в файл: {result_file_path}")
+        # Создаем выходную папку, если она не существует
         try:
-            # Используем ExcelWriter для сохранения с изображениями
-            with pd.ExcelWriter(result_file_path, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False)
-                
-                # Вставка изображений в файл Excel
-                excel_utils.insert_images_to_excel(writer, df, image_column)
-                
-            # Убеждаемся, что файл сохранен до удаления временных файлов
-            if os.path.exists(result_file_path):
-                log.info(f"Файл {result_file_path} успешно создан")
-                st.session_state['result_file_path'] = result_file_path
-                st.session_state['process_complete'] = True
-            else:
-                raise FileNotFoundError(f"Не удалось создать файл {result_file_path}")
-                
-        except Exception as excel_err:
-            log.error(f"Ошибка при сохранении Excel файла: {excel_err}")
-            raise
+            os.makedirs(output_folder, exist_ok=True)
+            log.info(f"Выходная папка создана/проверена: {output_folder}")
+        except Exception as e:
+            error_msg = f"Не удалось создать выходную папку: {str(e)}"
+            log.error(error_msg)
+            st.session_state.processing_error = error_msg
+            return False
+        
+        # Создаем имя выходного файла
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
+        output_file_path = os.path.join(output_folder, output_filename)
+        log.info(f"Выходной файл будет: {output_file_path}")
+        
+        # Проверяем наличие модуля обработки
+        try:
+            from core.processor import process_excel_file
+            log.info("Модуль process_excel_file успешно импортирован")
+        except ImportError as e:
+            error_msg = f"Ошибка импорта модуля обработки: {str(e)}"
+            log.error(error_msg)
+            st.session_state.processing_error = error_msg
+            return False
+        
+        try:
+            log.info("Вызываем process_excel_file с аргументами:")
+            log.info(f"- excel_file_path={excel_file_path}")
+            log.info(f"- article_column={article_column}")
+            log.info(f"- image_column={image_column}")
+            log.info(f"- image_folder={images_folder}")
+            log.info(f"- sheet_name={selected_sheet}")
             
-        log.info("Обработка файлов завершена успешно")
-        return True
+            # Распаковываем результат функции process_excel_file
+            result_file_path, result_df, images_inserted = process_excel_file(
+                file_path=excel_file_path,
+                article_column=article_column,
+                image_folder=images_folder,
+                image_column_name=image_column,
+                sheet_name=selected_sheet,
+                output_folder=output_folder
+            )
+            
+            log.info(f"Файл успешно обработан: {result_file_path}")
+            log.info(f"Вставлено изображений: {images_inserted}")
+            
+            # Проверяем, что результирующий файл создан
+            if not os.path.exists(result_file_path):
+                error_msg = "Выходной файл не был создан, хотя ошибок не возникло"
+                log.error(error_msg)
+                st.session_state.processing_error = error_msg
+                return False
+                
+            # Сохраняем путь к выходному файлу
+            st.session_state.output_file_path = result_file_path
+            
+            # Формируем сообщение об успешной обработке
+            success_msg = f"Обработка успешно завершена. Файл сохранен: {result_file_path}"
+            log.info(success_msg)
+            st.session_state.processing_result = success_msg
+            
+            log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
+            return True
+            
+        except Exception as e:
+            error_msg = f"Ошибка при обработке файла: {str(e)}"
+            log.error(error_msg)
+            log.exception("Детали ошибки:")
+            st.session_state.processing_error = error_msg
+            log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА С ОШИБКОЙ =====================")
+            return False
+            
     except Exception as e:
-        log.error(f"Ошибка при обработке файлов: {e}")
-        st.error(f"Ошибка при обработке файлов: {str(e)}")
+        error_msg = f"Ошибка в процессе обработки: {str(e)}"
+        log.error(error_msg)
+        log.exception("Детали ошибки:")
+        st.session_state.processing_error = error_msg
+        log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА С ОШИБКОЙ =====================")
         return False
     finally:
         # Сбрасываем флаг обработки в любом случае
-        st.session_state['is_processing'] = False
+        st.session_state.is_processing = False
 
 # Функция для отображения результатов обработки
 def show_results(stats: Dict[str, Any]):
@@ -963,14 +1091,23 @@ def initialize_session_state():
         st.session_state.available_sheets = []
     if 'force_rerun' not in st.session_state:
         st.session_state.force_rerun = False
+    if 'start_processing' not in st.session_state:
+        st.session_state.start_processing = False
+    if 'needs_rerun' not in st.session_state:
+        st.session_state.needs_rerun = False
+    # Добавляем параметры загрузки Excel
+    if 'skiprows' not in st.session_state:
+        st.session_state.skiprows = 0
+    if 'header_row' not in st.session_state:
+        st.session_state.header_row = 0
 
 # Функция для отображения вкладки настроек
 def settings_tab():
     """
     Отображает вкладку настроек в боковой панели.
     """
-    # Показываем текущие настройки
-    show_settings()
+    # Показываем текущие настройки с префиксом sidebar_
+    show_custom_settings("sidebar_")
     
     # Добавляем кнопки для управления настройками
     update_sidebar_buttons()
@@ -987,11 +1124,149 @@ def check_new_images_in_folder():
     st.info(f"Проверка изображений в папке: {images_folder}")
     # Здесь можно добавить код для обновления/сканирования изображений
 
+# Добавляем новую функцию для показа настроек с пользовательским префиксом
+def show_custom_settings(key_prefix="", use_expanders=True):
+    """
+    Отображает настройки с заданным префиксом ключей.
+    
+    Args:
+        key_prefix (str): Префикс для ключей элементов
+        use_expanders (bool): Использовать ли expanders для группировки настроек
+    """
+    # Функция для отображения настроек путей
+    def show_paths_settings():
+        # Получаем путь к папке загрузок пользователя
+        default_downloads = get_downloads_folder()
+        
+        # Выходная папка
+        output_folder = st.text_input(
+            "Папка для сохранения результата",
+            value=config_manager.get_setting("paths.output_folder_path", default_downloads),
+            help="Укажите путь к папке, где будет сохранен обработанный файл Excel",
+            key=f"{key_prefix}output_folder_input"
+        )
+        
+        if output_folder:
+            # Проверяем, существует ли папка
+            if not os.path.exists(output_folder):
+                st.warning(f"Папка {output_folder} не существует. Она будет создана при обработке файла.")
+            else:
+                st.success(f"Папка для сохранения: {output_folder}")
+            
+            # Сохраняем путь в настройках
+            config_manager.set_setting("paths.output_folder_path", output_folder)
+        
+        # Папка с изображениями
+        images_folder = st.text_input(
+            "Папка с изображениями",
+            value=config_manager.get_setting("paths.images_folder_path", ""),
+            help="Укажите путь к папке, где находятся изображения для вставки",
+            key=f"{key_prefix}images_folder_input"
+        )
+        
+        if images_folder:
+            # Проверяем, существует ли папка
+            if not os.path.exists(images_folder):
+                st.warning(f"Папка {images_folder} не существует!")
+            else:
+                st.success(f"Папка с изображениями: {images_folder}")
+                # Подсчитываем количество изображений в папке
+                image_files = [f for f in os.listdir(images_folder) 
+                              if os.path.isfile(os.path.join(images_folder, f)) and 
+                              f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp'))]
+                st.info(f"Найдено {len(image_files)} изображений в папке")
+            
+            # Сохраняем путь в настройках
+            config_manager.set_setting("paths.images_folder_path", images_folder)
+    
+    # Функция для отображения настроек изображений
+    def show_image_settings():
+        # Максимальный размер файла изображения
+        max_file_size_mb = st.number_input(
+            "Максимальный размер файла (МБ)",
+            min_value=1,
+            max_value=50,
+            value=config_manager.get_setting("image_settings.max_file_size_mb", 20),
+            help="Максимально допустимый размер файла изображения в мегабайтах",
+            key=f"{key_prefix}max_file_size_input",
+            label_visibility="visible"
+        )
+        config_manager.set_setting("image_settings.max_file_size_mb", int(max_file_size_mb))
+        
+        # Настройка изменения размера ячейки
+        adjust_cell_size = st.checkbox(
+            "Изменить размер ячейки",
+            value=config_manager.get_setting("excel_settings.adjust_cell_size", False),
+            help="Если включено, размеры ячеек будут изменены для лучшего отображения изображений",
+            key=f"{key_prefix}adjust_cell_size_input",
+            label_visibility="visible"
+        )
+        config_manager.set_setting("excel_settings.adjust_cell_size", adjust_cell_size)
+        
+        # Показываем настройки размеров только если включено изменение размера ячейки
+        if adjust_cell_size:
+            col1, col2 = st.columns(2)
+            
+            # Ширина колонки
+            column_width = col1.number_input(
+                "Ширина колонки (пикс.)",
+                min_value=50,
+                max_value=500,
+                value=config_manager.get_setting("excel_settings.column_width", 150),
+                help="Желаемая ширина колонки с изображениями в пикселях",
+                key=f"{key_prefix}column_width_input",
+                label_visibility="visible"
+            )
+            config_manager.set_setting("excel_settings.column_width", int(column_width))
+            
+            # Высота строки
+            row_height = col2.number_input(
+                "Высота строки (пикс.)",
+                min_value=30,
+                max_value=500,
+                value=config_manager.get_setting("excel_settings.row_height", 120),
+                help="Желаемая высота строки с изображениями в пикселях",
+                key=f"{key_prefix}row_height_input",
+                label_visibility="visible"
+            )
+            config_manager.set_setting("excel_settings.row_height", int(row_height))
+            
+        # Начальная строка
+        start_row = st.number_input(
+            "Начальная строка",
+            min_value=1,
+            value=config_manager.get_setting("excel_settings.start_row", 1),
+            help="Номер строки, с которой начнется обработка (по умолчанию с первой строки)",
+            key=f"{key_prefix}start_row_input",
+            label_visibility="visible"
+        )
+        config_manager.set_setting("excel_settings.start_row", int(start_row))
+    
+    # Используем expanders если разрешено, иначе просто показываем заголовки
+    if use_expanders:
+        # Добавляем настройки путей
+        with st.expander("Настройки путей", expanded=True):
+            show_paths_settings()
+        
+        # Настройки изображений
+        with st.expander("Настройки изображений", expanded=True):
+            show_image_settings()
+    else:
+        # Просто показываем заголовки и содержимое без expanders
+        st.subheader("Настройки путей")
+        show_paths_settings()
+        
+        st.subheader("Настройки изображений")
+        show_image_settings()
+
 # Главная функция приложения
 def main():
     """
     Главная функция приложения.
     """
+    # Проверяем наличие необходимых модулей
+    check_required_modules()
+    
     # Инициализируем session_state
     initialize_session_state()
     
@@ -1021,6 +1296,99 @@ def main():
     settings = config_manager.get_config_manager().current_settings
     if settings and settings.get("check_images_on_startup", False):
         check_new_images_in_folder()
+
+# Функция для проверки наличия требуемых модулей
+def check_required_modules():
+    """
+    Проверяет наличие всех необходимых модулей для работы приложения.
+    """
+    # Список модулей для проверки
+    required_modules = [
+        ("core.processor", "Основной обработчик Excel файлов"),
+        ("utils.image_utils", "Утилиты для работы с изображениями"),
+        ("utils.excel_utils", "Утилиты для работы с Excel"),
+        ("utils.config_manager", "Менеджер конфигурации")
+    ]
+    
+    # Проверяем каждый модуль
+    missing_modules = []
+    for module_name, description in required_modules:
+        try:
+            __import__(module_name)
+            log.info(f"Модуль {module_name} успешно импортирован")
+        except ImportError as e:
+            log.error(f"Ошибка импорта модуля {module_name}: {str(e)}")
+            missing_modules.append((module_name, description))
+    
+    # Если есть отсутствующие модули, показываем ошибку
+    if missing_modules:
+        error_msg = "Не удалось импортировать необходимые модули:\n"
+        for module, desc in missing_modules:
+            error_msg += f"- {module} ({desc})\n"
+        st.error(error_msg)
+        st.warning("Приложение не может работать корректно без этих модулей. Проверьте установку.")
+        
+        # Выводим подробную информацию по решению проблемы
+        with st.expander("Варианты решения проблемы"):
+            st.markdown("""
+            ### Проверьте структуру проекта
+            Убедитесь, что структура проекта соответствует ожидаемой:
+            ```
+            ExcelWithImages/
+            ├── core/
+            │   └── processor.py
+            ├── utils/
+            │   ├── __init__.py
+            │   ├── image_utils.py
+            │   ├── excel_utils.py
+            │   └── config_manager.py
+            └── app/
+                └── app.py
+            ```
+            
+            ### Проверьте PYTHONPATH
+            Модули должны быть доступны из корня проекта. Проверьте, что добавлено:
+            ```python
+            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+            ```
+            
+            ### Логи приложения
+            Проверьте логи для получения дополнительной информации:
+            ```
+            ExcelWithImages/logs/app_latest.log
+            ```
+            """)
+        
+        # Выводим текущий PYTHONPATH
+        st.write("**Текущий PYTHONPATH:**")
+        st.code("\n".join(sys.path))
+        
+        # Выводим текущую директорию
+        st.write(f"**Текущая директория:** {os.getcwd()}")
+        st.write(f"**Директория приложения:** {os.path.dirname(__file__)}")
+        
+        # Выводим содержимое папок с модулями
+        try:
+            core_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'core')
+            utils_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'utils')
+            
+            st.write(f"**Содержимое директории core ({core_dir}):**")
+            if os.path.exists(core_dir):
+                st.code("\n".join(os.listdir(core_dir)))
+            else:
+                st.warning("Директория не существует")
+                
+            st.write(f"**Содержимое директории utils ({utils_dir}):**")
+            if os.path.exists(utils_dir):
+                st.code("\n".join(os.listdir(utils_dir)))
+            else:
+                st.warning("Директория не существует")
+        except Exception as e:
+            st.error(f"Ошибка при проверке директорий: {str(e)}")
+            
+        return False
+    
+    return True
 
 if __name__ == "__main__":
     main() 

@@ -3,11 +3,25 @@ import logging
 from typing import Any
 from .config_manager import ConfigManager
 
-# Глобальный экземпляр конфиг-менеджера
-_config_manager = None
-
 # Настройка логгера
 logger = logging.getLogger(__name__)
+
+def get_downloads_folder():
+    """Возвращает путь к папке загрузок пользователя"""
+    if os.name == 'nt':  # Windows
+        import winreg
+        sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+        downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+            try:
+                return winreg.QueryValueEx(key, downloads_guid)[0]
+            except:
+                return os.path.join(os.path.expanduser('~'), 'Downloads')
+    else:  # Linux, macOS и другие
+        return os.path.join(os.path.expanduser('~'), 'Downloads')
+
+# Глобальный экземпляр конфиг-менеджера
+_config_manager = None
 
 def init_config_manager(presets_folder: str) -> None:
     """

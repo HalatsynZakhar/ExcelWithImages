@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 import json
 import time
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
 # Add parent directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +24,7 @@ from utils import image_utils
 from utils.config_manager import get_downloads_folder
 
 # Setup logging
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 # Helper function for temp directories
 def ensure_temp_dir(prefix: str = "") -> str:
@@ -41,146 +41,251 @@ def ensure_temp_dir(prefix: str = "") -> str:
     os.makedirs(temp_dir, exist_ok=True)
     return temp_dir
 
-def process_excel_file(excel_file_path, article_column, image_column, image_folder, sheet_name=0):
+def process_excel_file(file_path, article_column, image_folder, image_output_folder=None, 
+                       output_path=None, output_folder=None, image_column_name='Image_Path',
+                       max_width=None, max_height=None, quality=85, **kwargs) -> Tuple[str, pd.DataFrame, int]:
     """
-    Обрабатывает Excel файл и добавляет изображения к соответствующим артикулам.
+    Обрабатывает Excel-файл, добавляя изображения для каждой строки.
     
     Args:
-        excel_file_path (str): Путь к Excel файлу для обработки
-        article_column (str): Имя колонки с артикулами
-        image_column (str): Имя колонки для вставки изображений
-        image_folder (str): Путь к папке с изображениями
-        sheet_name (str, int): Имя или индекс листа для обработки
-        
+        file_path (str): Путь к Excel-файлу
+        article_column (str): Буквенное обозначение столбца с артикулами
+        image_folder (str): Папка с изображениями
+        image_output_folder (str, optional): Папка для сохранения обработанных изображений
+        output_path (str, optional): Путь для сохранения результата
+        output_folder (str, optional): Папка для сохранения результата
+        image_column_name (str, optional): Название столбца для путей к изображениям
+        max_width (int, optional): Максимальная ширина изображения
+        max_height (int, optional): Максимальная высота изображения
+        quality (int, optional): Качество сжатия изображений (1-100)
+        **kwargs: Дополнительные параметры
+
     Returns:
-        str: Путь к обработанному файлу
+        tuple: (output_path, processed_df, images_inserted)
+        
+    Raises:
+        FileNotFoundError: Если файл Excel или папка с изображениями не найдены
+        ValueError: Если Excel-файл пуст или указан неверный столбец с артикулами
+        Exception: Другие ошибки обработки
     """
-    # Логируем параметры обработки
-    log.info(f"Начало обработки файла: {excel_file_path}")
-    log.info(f"Колонка с артикулами: {article_column}")
-    log.info(f"Колонка для изображений: {image_column}")
-    log.info(f"Папка с изображениями: {image_folder}")
-    log.info(f"Выбранный лист: {sheet_name}")
+    logger.info(f"Обработка Excel-файла: {file_path}")
+    logger.info(f"Параметры: article_column={article_column}, image_folder={image_folder}, "
+                f"image_output_folder={image_output_folder}, output_path={output_path}, "
+                f"output_folder={output_folder}, image_column_name={image_column_name}, "
+                f"max_width={max_width}, max_height={max_height}, quality={quality}")
     
+    # Проверка наличия файла
+    if not os.path.exists(file_path):
+        logger.error(f"Файл не найден: {file_path}")
+        raise FileNotFoundError(f"Файл не найден: {file_path}")
+    
+    # Проверка наличия папки с изображениями
+    if not os.path.exists(image_folder):
+        logger.error(f"Папка с изображениями не найдена: {image_folder}")
+        raise FileNotFoundError(f"Папка с изображениями не найдена: {image_folder}")
+    
+    # Чтение Excel-файла
     try:
-        # Логируем параметры для отладки
-        log.info(f"Обработка Excel-файла: {excel_file_path}")
-        log.info(f"Колонка с артикулами: {article_column}, Колонка для изображений: {image_column}")
-        log.info(f"Папка с изображениями: {image_folder}, Имя листа: {sheet_name}")
+        logger.debug(f"Чтение Excel-файла: {file_path}")
+        # Извлекаем параметр sheet_name из kwargs, если он есть
+        sheet_name = kwargs.get('sheet_name', 0)  # По умолчанию берём первый лист
+        logger.debug(f"Используем лист: {sheet_name}")
         
-        # Чтение Excel-файла
-        log.info(f"Чтение Excel-файла: {excel_file_path}")
-        if not os.path.exists(excel_file_path):
-            raise FileNotFoundError(f"Файл не найден: {excel_file_path}")
-            
-        # Загружаем файл с указанным листом
-        if sheet_name:
-            df = pd.read_excel(excel_file_path, sheet_name=sheet_name)
-        else:
-            df = pd.read_excel(excel_file_path)
-            
-        log.info(f"Файл успешно загружен. Размерность данных: {df.shape}")
-        
-        # Преобразуем буквенные обозначения столбцов в индексы/имена столбцов
-        try:
-            # Получаем индекс колонки для article_column (буква -> индекс)
-            article_idx = excel_utils.column_letter_to_index(article_column)
-            article_name = df.columns[article_idx]
-            log.info(f"Колонка с артикулами преобразована: {article_column} -> {article_name}")
-            
-            # Получаем индекс колонки для image_column (буква -> индекс)
-            if image_column:
-                image_idx = excel_utils.column_letter_to_index(image_column)
-                image_name = df.columns[image_idx]
-                log.info(f"Колонка для изображений преобразована: {image_column} -> {image_name}")
-            else:
-                image_name = None
-        except Exception as e:
-            log.error(f"Ошибка при преобразовании буквенного обозначения колонки: {e}")
-            raise ValueError(f"Неверное буквенное обозначение колонки: {article_column} или {image_column}. Ошибка: {e}")
-        
-        # Создаем временную директорию для обработанных изображений
-        temp_dir = ensure_temp_dir(prefix="excel_images_")
-        log.info(f"Создана временная директория для обработанных изображений: {temp_dir}")
-        
-        # Путь к результирующему файлу
-        output_folder = get_downloads_folder()
-        os.makedirs(output_folder, exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        result_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
-        result_file_path = os.path.join(output_folder, result_filename)
-        
-        # Массив для хранения путей ко всем обработанным изображениям
-        processed_image_paths = []
-        total_rows = len(df)
-        
-        # Обработка каждой строки DataFrame
-        for idx, row in df.iterrows():
-            try:
-                # Получение и нормализация артикула
-                article = row[article_name]
-                if pd.isna(article):
-                    log.warning(f"Строка {idx+1}: артикул отсутствует, пропускаем")
-                    continue
-                    
-                normalized_article = image_utils.normalize_article_number(str(article))
-                
-                # Поиск изображений для артикула
-                image_paths = image_utils.find_images_by_article(image_folder, normalized_article)
-                
-                if not image_paths:
-                    log.warning(f"Для артикула {article} (нормализовано: {normalized_article}) изображения не найдены")
-                    continue
-                    
-                log.info(f"Для артикула {article} найдено {len(image_paths)} изображений")
-                
-                # Оптимизация изображений для Excel
-                processed_images = []
-                for img_path in image_paths:
-                    try:
-                        # Создание имени для обработанного изображения
-                        img_filename = f"{normalized_article}_{len(processed_images)}_{os.path.basename(img_path)}"
-                        processed_img_path = os.path.join(temp_dir, img_filename)
-                        
-                        # Оптимизация изображения
-                        image_utils.optimize_image_for_excel(img_path, processed_img_path)
-                        processed_images.append(processed_img_path)
-                        processed_image_paths.append(processed_img_path)
-                        
-                        log.debug(f"Изображение {img_path} обработано и сохранено как {processed_img_path}")
-                    except Exception as img_err:
-                        log.error(f"Ошибка при обработке изображения {img_path}: {img_err}")
-                
-                # Обновление DataFrame с путями к обработанным изображениям
-                if processed_images and image_name:
-                    df.at[idx, image_name] = ",".join(processed_images)
-            except Exception as row_err:
-                log.error(f"Ошибка при обработке строки {idx+1}: {row_err}")
-        
-        # Сохранение обработанного DataFrame в новый Excel файл
-        log.info(f"Сохранение результата в файл: {result_file_path}")
-        try:
-            # Используем ExcelWriter для сохранения с изображениями
-            with pd.ExcelWriter(result_file_path, engine='openpyxl') as writer:
-                df.to_excel(writer, index=False, sheet_name=sheet_name if isinstance(sheet_name, str) else 'Sheet1')
-                
-                # Вставка изображений в файл Excel
-                excel_utils.insert_images_to_excel(writer, df, image_name)
-                
-            # Убеждаемся, что файл сохранен до удаления временных файлов
-            if os.path.exists(result_file_path):
-                log.info(f"Файл {result_file_path} успешно создан")
-            else:
-                raise FileNotFoundError(f"Не удалось создать файл {result_file_path}")
-                
-        except Exception as excel_err:
-            log.error(f"Ошибка при сохранении Excel файла: {excel_err}")
-            raise
-            
-        log.info("Обработка файла завершена успешно")
-        return result_file_path
-        
+        df = pd.read_excel(file_path, sheet_name=sheet_name)
+        logger.debug(f"Excel-файл успешно прочитан, форма DataFrame: {df.shape}")
     except Exception as e:
-        log.error(f"Ошибка при обработке файла: {e}")
-        raise 
+        logger.error(f"Ошибка при чтении Excel-файла: {e}")
+        raise
+    
+    # Проверка наличия данных в DataFrame
+    if df.empty:
+        logger.error("Excel-файл не содержит данных")
+        raise ValueError("Excel-файл не содержит данных")
+    
+    # Проверка наличия достаточного количества столбцов
+    try:
+        # Преобразование буквенного обозначения столбца в индекс
+        article_idx = excel_utils.column_letter_to_index(article_column)
+        
+        # Проверка, что индекс валидный
+        if article_idx < 0:
+            logger.error(f"Неверное буквенное обозначение столбца: {article_column}")
+            raise ValueError(f"Неверное буквенное обозначение столбца: {article_column}")
+        
+        # Проверка, существует ли указанный столбец в DataFrame
+        if article_idx >= len(df.columns):
+            logger.error(f"Столбец с индексом {article_idx} (обозначение {article_column}) не существует в файле")
+            raise ValueError(f"Столбец с обозначением {article_column} не существует в файле. "
+                           f"Доступны столбцы от A до {excel_utils.convert_column_index_to_letter(len(df.columns) - 1)}")
+    except ValueError as e:
+        logger.error(f"Ошибка при определении индекса столбца: {e}")
+        raise
+        
+    # Создание временной директории для обработанных изображений, если не указана
+    if not image_output_folder:
+        image_output_folder = ensure_temp_dir('processed_images')
+        logger.info(f"Создана временная директория для обработанных изображений: {image_output_folder}")
+    
+    # Добавление столбца для путей к изображениям, если его еще нет
+    if image_column_name not in df.columns:
+        df[image_column_name] = None
+        logger.debug(f"Добавлен столбец {image_column_name} для путей к изображениям")
+    
+    # Обработка каждой строки DataFrame
+    processed_images_count = 0
+    errors_count = 0
+    
+    logger.info(f"Начинаем обработку {len(df)} строк")
+    for idx, row in df.iterrows():
+        try:
+            # Получение артикула из строки
+            article_value = row.iloc[article_idx]
+            
+            # Пропускаем пустые значения
+            if pd.isna(article_value) or article_value == "":
+                logger.warning(f"Пропуск строки {idx+1}: пустое значение артикула")
+                continue
+            
+            # Преобразуем в строку
+            article = str(article_value)
+            
+            logger.debug(f"Обработка строки {idx+1}, артикул: {article}")
+            
+            # Нормализация артикула
+            normalized_article = image_utils.normalize_article(article)
+            logger.debug(f"Нормализованный артикул: {normalized_article}")
+            
+            # Поиск изображения для артикула
+            image_path = image_utils.find_image_by_article(normalized_article, image_folder)
+            
+            if image_path:
+                logger.info(f"Найдено изображение для артикула {article}: {image_path}")
+                
+                # Оптимизация изображения, если указаны параметры
+                if max_width or max_height:
+                    processed_image_path = os.path.join(
+                        image_output_folder, 
+                        f"{normalized_article}_{int(time.time())}.jpg"
+                    )
+                    
+                    # Обработка изображения
+                    img_buffer, dimensions = image_utils.process_image(
+                        image_path=image_path,
+                        width=max_width,
+                        height=max_height,
+                        max_size_kb=quality * 10  # Примерная зависимость размера от качества
+                    )
+                    
+                    # Сохранение в файл
+                    with open(processed_image_path, 'wb') as f:
+                        f.write(img_buffer.getvalue())
+                    
+                    logger.debug(f"Изображение оптимизировано: {processed_image_path}, размеры: {dimensions}")
+                    
+                    # Обновление пути к изображению
+                    df.at[idx, image_column_name] = processed_image_path
+                else:
+                    # Использование оригинального изображения
+                    df.at[idx, image_column_name] = image_path
+                    logger.debug(f"Использовано оригинальное изображение: {image_path}")
+                
+                processed_images_count += 1
+            else:
+                logger.warning(f"Изображение для артикула '{article}' не найдено")
+                
+        except Exception as e:
+            errors_count += 1
+            logger.error(f"Ошибка при обработке строки {idx+1}: {e}")
+            # Пропускаем строку с ошибкой и продолжаем
+            continue
+    
+    logger.info(f"Обработка завершена: обработано {processed_images_count} изображений из {len(df)} строк, ошибок: {errors_count}")
+    
+    # Определение пути для сохранения результата
+    if not output_path:
+        if output_folder:
+            base_name = os.path.basename(file_path)
+            output_path = os.path.join(output_folder, f"processed_{base_name}")
+        else:
+            # Добавление суффикса к имени файла
+            name, ext = os.path.splitext(file_path)
+            output_path = f"{name}_processed{ext}"
+    
+    # Создание директории для выходного файла, если она не существует
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+        logger.info(f"Создана директория для выходного файла: {output_dir}")
+    
+    # Сохранение DataFrame в Excel
+    try:
+        logger.info(f"Сохранение результата в файл: {output_path}")
+        
+        # Сначала сохраняем DataFrame в Excel без изображений
+        df.to_excel(output_path, index=False, sheet_name='Sheet1', header=False)
+        
+        # Теперь открываем файл через openpyxl и добавляем изображения
+        from openpyxl import load_workbook
+        from openpyxl.drawing.image import Image
+        
+        # Открываем созданный файл
+        logger.info(f"Открываем файл {output_path} для вставки изображений")
+        wb = load_workbook(output_path)
+        ws = wb.active
+        
+        # Инициализируем счетчик вставленных изображений
+        images_inserted = 0
+        
+        # Вставляем изображения
+        logger.info(f"Вставляем изображения в Excel из столбца {image_column_name}")
+        img_col = df.columns.get_loc(image_column_name)
+        
+        for idx, row in df.iterrows():
+            if pd.notna(row[image_column_name]) and os.path.exists(row[image_column_name]):
+                img_path = row[image_column_name]
+                cell_address = f"{excel_utils.convert_column_index_to_letter(img_col + 1)}{idx + 1}"
+                logger.debug(f"Вставка изображения {img_path} в ячейку {cell_address}")
+                
+                try:
+                    # Создаем объект изображения
+                    img = Image(img_path)
+                    
+                    # Установим разумные размеры изображения, если они не указаны
+                    if not max_width and not max_height:
+                        img.width = 150
+                        img.height = 100
+                    else:
+                        if max_width:
+                            img.width = max_width
+                        if max_height:
+                            img.height = max_height
+                    
+                    # Добавляем изображение на лист с привязкой к ячейке
+                    ws.add_image(img, cell_address)
+                    images_inserted += 1
+                    logger.debug(f"Изображение успешно вставлено в ячейку {cell_address}")
+                    
+                except Exception as img_err:
+                    logger.error(f"Ошибка при вставке изображения в ячейку {cell_address}: {str(img_err)}")
+        
+        # Устанавливаем оптимальные размеры ячеек для отображения изображений
+        if images_inserted > 0:
+            # Устанавливаем ширину столбца с изображениями
+            ws.column_dimensions[excel_utils.convert_column_index_to_letter(img_col + 1)].width = 25
+            
+            # Устанавливаем высоту строк
+            for idx in range(len(df)):
+                ws.row_dimensions[idx + 1].height = 80
+        
+        # Сохраняем файл с изображениями
+        logger.info(f"Сохраняем файл с {images_inserted} изображениями")
+        wb.save(output_path)
+        
+        logger.info(f"Вставлено изображений в Excel: {images_inserted}")
+    
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении результатов: {e}")
+        raise
+    
+    logger.info(f"Результат сохранен: {output_path}")
+    return output_path, df, images_inserted 

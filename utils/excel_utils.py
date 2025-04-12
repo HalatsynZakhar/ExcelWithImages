@@ -964,6 +964,9 @@ def column_letter_to_index(column_letter: str) -> int:
         
     Returns:
         int: Индекс столбца (0-based)
+        
+    Raises:
+        ValueError: Если буквенное обозначение столбца неверное
     """
     try:
         # Используем стандартную функцию из openpyxl и вычитаем 1 для получения 0-based индекса
@@ -972,8 +975,8 @@ def column_letter_to_index(column_letter: str) -> int:
         return col_idx
     except Exception as e:
         logger.error(f"Ошибка при преобразовании буквы столбца '{column_letter}' в индекс: {e}")
-        # В случае ошибки возвращаем 0 (индекс первого столбца)
-        return 0 
+        # Выбрасываем исключение вместо возврата значения по умолчанию
+        raise ValueError(f"Неверное буквенное обозначение колонки: '{column_letter}'. Ошибка: {e}")
 
 def insert_images_to_excel(writer, df, image_column):
     """
