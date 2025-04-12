@@ -1,40 +1,46 @@
+import os
+import logging
+from typing import Any
 from .config_manager import ConfigManager
 
-# Хранит глобальный экземпляр ConfigManager
-_config_manager_instance = None
+# Глобальный экземпляр конфиг-менеджера
+_config_manager = None
 
-def init_config_manager(presets_folder: str) -> ConfigManager:
+# Настройка логгера
+logger = logging.getLogger(__name__)
+
+def init_config_manager(presets_folder: str) -> None:
     """
-    Инициализирует менеджер конфигурации и возвращает его
+    Инициализирует экземпляр ConfigManager
     
     Args:
-        presets_folder: Путь к папке с пресетами настроек
-        
-    Returns:
-        Экземпляр ConfigManager
+        presets_folder: Путь к папке с настройками
     """
-    global _config_manager_instance
-    _config_manager_instance = ConfigManager(presets_folder)
-    return _config_manager_instance
+    global _config_manager
+    _config_manager = ConfigManager(presets_folder)
+    
+    # Пытаемся загрузить сохраненные настройки
+    _config_manager.load_settings()
 
 def get_config_manager() -> ConfigManager:
     """
-    Возвращает экземпляр ConfigManager
+    Возвращает текущий экземпляр ConfigManager
     
     Returns:
         Экземпляр ConfigManager
     """
-    global _config_manager_instance
-    if _config_manager_instance is None:
-        raise RuntimeError("ConfigManager не инициализирован. Сначала вызовите init_config_manager()")
-    return _config_manager_instance
+    global _config_manager
+    if _config_manager is None:
+        raise RuntimeError("ConfigManager не инициализирован. Вызовите init_config_manager() перед использованием.")
+    
+    return _config_manager
 
-def get_setting(path: str, default=None):
+def get_setting(path: str, default=None) -> Any:
     """
     Получает значение настройки по указанному пути
     
     Args:
-        path: Путь к настройке в формате dot notation (например, "paths.input_folder")
+        path: Путь к настройке в точечной нотации (например, "excel_settings.article_column")
         default: Значение по умолчанию, если настройка не найдена
         
     Returns:
@@ -42,41 +48,35 @@ def get_setting(path: str, default=None):
     """
     return get_config_manager().get_setting(path, default)
 
-def set_setting(path: str, value):
+def set_setting(path: str, value: Any) -> None:
     """
     Устанавливает значение настройки по указанному пути
     
     Args:
-        path: Путь к настройке в формате dot notation (например, "paths.input_folder")
-        value: Новое значение настройки
+        path: Путь к настройке в точечной нотации
+        value: Устанавливаемое значение
     """
     get_config_manager().set_setting(path, value)
 
-def save_settings(preset_name: str = None) -> bool:
+def save_settings() -> bool:
     """
-    Сохраняет текущие настройки в файл
+    Сохраняет текущие настройки
     
-    Args:
-        preset_name: Имя пресета для сохранения
-        
     Returns:
         True, если настройки успешно сохранены, иначе False
     """
-    return get_config_manager().save_settings(preset_name)
+    return get_config_manager().save_settings()
 
-def load_settings(preset_name: str) -> bool:
+def load_settings() -> bool:
     """
-    Загружает настройки из файла
+    Загружает настройки
     
-    Args:
-        preset_name: Имя пресета для загрузки
-        
     Returns:
         True, если настройки успешно загружены, иначе False
     """
-    return get_config_manager().load_settings(preset_name)
+    return get_config_manager().load_settings()
 
-def reset_settings():
+def reset_settings() -> None:
     """
     Сбрасывает настройки к значениям по умолчанию
     """

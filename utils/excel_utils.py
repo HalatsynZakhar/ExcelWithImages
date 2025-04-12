@@ -722,9 +722,10 @@ def create_excel_copy(excel_file: str, output_dir: str) -> str:
         raise
 
 def process_excel_file(excel_file: str, article_column: str, image_column: str, 
-                      images_folder: str, start_row: int = 2, sheet_index: int = 1,
-                      max_size_kb: int = 100, quality: int = 90, 
-                      adjust_dimensions: bool = True) -> Dict[str, Any]:
+                      images_folder: str, start_row: int = 1, sheet_index: int = 1,
+                      max_file_size_mb: int = 20, target_width: int = 300, target_height: int = 300,
+                      adjust_cell_size: bool = False, column_width: int = 150,
+                      row_height: int = 120) -> Dict[str, Any]:
     """
     Обрабатывает Excel файл, добавляя изображения по артикулам
     
@@ -733,11 +734,14 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
         article_column (str): Столбец с артикулами
         image_column (str): Столбец для вставки изображений
         images_folder (str): Папка с изображениями
-        start_row (int): Начальная строка (после заголовков)
+        start_row (int): Начальная строка (начиная с 1)
         sheet_index (int): Индекс листа в Excel-файле (начиная с 1)
-        max_size_kb (int): Максимальный размер изображения в КБ
-        quality (int): Качество изображений (1-100)
-        adjust_dimensions (bool): Настраивать размеры строк/столбцов
+        max_file_size_mb (int): Максимальный размер файла изображения в МБ
+        target_width (int): Максимальная ширина изображения в пикселях (используется только для оптимизации)
+        target_height (int): Максимальная высота изображения в пикселях (используется только для оптимизации)
+        adjust_cell_size (bool): Изменять размер ячейки для лучшего отображения изображений
+        column_width (int): Желаемая ширина колонки с изображениями в пикселях (при adjust_cell_size=True)
+        row_height (int): Желаемая высота строки с изображениями в пикселях (при adjust_cell_size=True)
         
     Returns:
         Dict[str, Any]: Статистика обработки
@@ -757,6 +761,11 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
         logger.info(f"Начинаем обработку Excel файла: {excel_file}")
         logger.info(f"Параметры: article_column={article_column}, image_column={image_column}, start_row={start_row}, sheet_index={sheet_index}")
         logger.info(f"Папка с изображениями: {images_folder}")
+        logger.info(f"Настройки изображений: max_file_size_mb={max_file_size_mb}")
+        logger.info(f"Настройки форматирования: adjust_cell_size={adjust_cell_size}, column_width={column_width}, row_height={row_height}")
+        
+        # Конвертируем МБ в КБ для обработки
+        max_size_kb = max_file_size_mb * 1024
         
         # Проверяем существование файла Excel
         if not os.path.exists(excel_file):
@@ -796,35 +805,62 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
         ws = wb[sheet_name]
         logger.info(f"Выбран лист: {sheet_name}")
         
-        # Определяем общее количество строк
+        # Определяем общее количество строк с артикулами
         total_rows = 0
+        articles_list = []
+        
+        # Более тщательная проверка наличия артикулов
         for row in range(start_row, ws.max_row + 1):
             article_cell = f"{article_column}{row}"
-            if ws[article_cell].value:
-                total_rows += 1
+            
+            # Проверяем, что ячейка не пустая и содержит значение
+            if ws[article_cell].value is not None:
+                # Преобразуем значение в строку и проверяем, что оно не пустое после удаления пробелов
+                article_value = str(ws[article_cell].value).strip()
+                if article_value:
+                    total_rows += 1
+                    articles_list.append(article_value)
+                    logger.debug(f"Найден артикул в строке {row}: {article_value}")
         
         stats["total_articles"] = total_rows
         logger.info(f"Найдено {total_rows} строк с артикулами")
         
-        # Если нет артикулов, выходим
+        # Если нет артикулов, выводим подробную информацию и выходим
         if total_rows == 0:
             logger.warning(f"В файле не найдено артикулов в столбце {article_column}, начиная со строки {start_row}")
-            stats["end_time"] = time.time()
-            stats["processing_time"] = stats["end_time"] - stats["start_time"]
+            logger.info(f"Проверьте следующее:")
+            logger.info(f"1. Правильно ли указан столбец с артикулами ({article_column})?")
+            logger.info(f"2. Правильно ли указана начальная строка ({start_row})?")
+            logger.info(f"3. Содержит ли выбранный лист ({sheet_name}) данные?")
             
             # Сохраняем пустой результат
             output_file = f"{os.path.splitext(excel_file)[0]}_with_images.xlsx"
             wb.save(output_file)
+            stats["end_time"] = time.time()
+            stats["processing_time"] = stats["end_time"] - stats["start_time"]
             stats["output_file"] = output_file
             
             return stats
+        
+        # Если нужно настроить размер ячейки, делаем это сразу
+        if adjust_cell_size:
+            # Устанавливаем ширину колонки (1 единица ≈ 0.1640625 символа)
+            col_width = column_width / 7  # Приблизительное преобразование пикселей в единицы ширины столбца
+            ws.column_dimensions[image_column].width = col_width
+            logger.info(f"Установлена ширина колонки {image_column}: {col_width} ед. ({column_width} пикс.)")
         
         # Обрабатываем каждую строку
         logger.info("Начинаем обработку строк...")
         for row in range(start_row, ws.max_row + 1):
             article_cell = f"{article_column}{row}"
-            article = ws[article_cell].value
+            article_value = ws[article_cell].value
             
+            # Пропускаем пустые ячейки
+            if article_value is None:
+                continue
+                
+            # Преобразуем значение в строку и проверяем, что оно не пустое после удаления пробелов
+            article = str(article_value).strip()
             if not article:
                 continue
             
@@ -839,12 +875,18 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                 
                 # Обрабатываем изображение
                 try:
-                    img_buffer, (width, height) = image_utils.process_image(
+                    # Получаем исходные размеры изображения
+                    original_width, original_height = image_utils.get_image_dimensions(image_path)
+                    logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
+                    
+                    # Обрабатываем изображение только с оптимизацией качества,
+                    # но без принудительного изменения размеров
+                    img_buffer = image_utils.optimize_image_for_excel(
                         image_path=image_path,
                         max_size_kb=max_size_kb
                     )
                     
-                    logger.debug(f"Изображение обработано, размеры: {width}x{height}")
+                    logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
                     
                     # Создаем временный файл для изображения
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_img:
@@ -855,25 +897,20 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                     
                     # Вставляем изображение в ячейку
                     try:
-                        # Получаем объект изображения для Excel
-                        xl_image = PILImage.open(temp_img_path)
-                        
                         # Получаем букву столбца и номер строки
                         cell_address = f"{image_column}{row}"
                         
                         # Вставляем изображение
                         img = openpyxl.drawing.image.Image(temp_img_path)
                         
-                        # Настраиваем размеры изображения
-                        if adjust_dimensions:
-                            # Устанавливаем ширину столбца
-                            col_letter = image_column
-                            ws.column_dimensions[col_letter].width = width * 0.14  # примерный коэффициент
-                            
-                            # Устанавливаем высоту строки
-                            ws.row_dimensions[row].height = height * 0.75  # примерный коэффициент
+                        # Если нужно настроить высоту строки
+                        if adjust_cell_size:
+                            # Устанавливаем высоту строки (1 единица ≈ 0.75 пункта)
+                            row_height_excel = row_height * 0.75  # Приблизительное преобразование пикселей в единицы высоты строки
+                            ws.row_dimensions[row].height = row_height_excel
+                            logger.debug(f"Установлена высота строки {row}: {row_height_excel} ед. ({row_height} пикс.)")
                         
-                        # Добавляем изображение
+                        # Добавляем изображение как есть, без изменения размеров
                         ws.add_image(img, cell_address)
                         stats["images_inserted"] += 1
                         
@@ -889,6 +926,8 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                 except Exception as e:
                     logger.error(f"Ошибка при обработке изображения для артикула '{article}': {e}")
                     # Продолжаем обработку других строк
+            else:
+                logger.warning(f"Изображение для артикула '{article}' не найдено")
         
         # Сохраняем файл
         output_file = f"{os.path.splitext(excel_file)[0]}_with_images.xlsx"
@@ -915,3 +954,68 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
     except Exception as e:
         logger.exception(f"Ошибка при обработке Excel файла: {e}")
         raise 
+
+def column_letter_to_index(column_letter: str) -> int:
+    """
+    Преобразует буквенное обозначение столбца (A, B, C, AA, AB, etc.) в индекс (0-based).
+    
+    Args:
+        column_letter (str): Буквенное обозначение столбца
+        
+    Returns:
+        int: Индекс столбца (0-based)
+    """
+    try:
+        # Используем стандартную функцию из openpyxl и вычитаем 1 для получения 0-based индекса
+        col_idx = column_index_from_string(column_letter) - 1
+        logger.debug(f"Преобразование {column_letter} в индекс {col_idx}")
+        return col_idx
+    except Exception as e:
+        logger.error(f"Ошибка при преобразовании буквы столбца '{column_letter}' в индекс: {e}")
+        # В случае ошибки возвращаем 0 (индекс первого столбца)
+        return 0 
+
+def insert_images_to_excel(writer, df, image_column):
+    """
+    Вставляет изображения в файл Excel на основе данных из DataFrame
+    
+    Args:
+        writer: ExcelWriter объект для записи в Excel
+        df: DataFrame с путями к изображениям
+        image_column: Название колонки с путями к изображениям
+        
+    Returns:
+        bool: True, если успешно
+    """
+    try:
+        if image_column is None or image_column not in df.columns:
+            logger.warning(f"Колонка {image_column} не найдена в DataFrame")
+            return False
+            
+        # Получаем рабочий лист
+        worksheet = writer.sheets[list(writer.sheets.keys())[0]]
+        
+        # Находим индекс колонки с изображениями
+        col_idx = list(df.columns).index(image_column) + 1  # +1 для совместимости с openpyxl (индексы с 1)
+        col_letter = get_column_letter(col_idx)
+        
+        # Добавляем изображения в каждую ячейку
+        row_offset = 1  # Учитываем строку заголовка
+        
+        for idx, row in df.iterrows():
+            if pd.notna(row[image_column]):
+                image_paths = str(row[image_column]).split(",")
+                
+                for i, img_path in enumerate(image_paths):
+                    if os.path.exists(img_path.strip()):
+                        # Определяем ячейку для вставки
+                        anchor_cell = f"{col_letter}{idx + row_offset + 1}"
+                        
+                        # Вставляем изображение
+                        insert_image(worksheet, img_path.strip(), anchor_cell)
+                        
+        logger.info(f"Изображения успешно вставлены в Excel файл")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при вставке изображений в Excel: {e}")
+        return False 

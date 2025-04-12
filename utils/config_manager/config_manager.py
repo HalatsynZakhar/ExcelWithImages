@@ -19,11 +19,10 @@ class ConfigManager:
         Инициализирует менеджер конфигурации
         
         Args:
-            presets_folder: Путь к папке с пресетами настроек
+            presets_folder: Путь к папке с настройками
         """
         self.presets_folder = presets_folder
         self.current_settings = {}
-        self.current_preset_name = "default"
         
         # Создаем папку для пресетов, если она не существует
         os.makedirs(self.presets_folder, exist_ok=True)
@@ -31,7 +30,7 @@ class ConfigManager:
         # Инициализируем настройки по умолчанию
         self.reset_settings()
         
-        logger.info(f"ConfigManager инициализирован с папкой пресетов: {presets_folder}")
+        logger.info(f"ConfigManager инициализирован с папкой настроек: {presets_folder}")
     
     def reset_settings(self):
         """
@@ -58,7 +57,6 @@ class ConfigManager:
             }
         }
         
-        self.current_preset_name = "default"
         logger.info("Настройки сброшены к значениям по умолчанию")
     
     def get_setting(self, path: str, default=None) -> Any:
@@ -112,41 +110,32 @@ class ConfigManager:
         """
         Сохраняет текущие настройки в файл
         
-        Args:
-            preset_name: Имя пресета для сохранения
-            
         Returns:
             True, если настройки успешно сохранены, иначе False
         """
-        if preset_name:
-            self.current_preset_name = preset_name
-        
-        preset_path = os.path.join(self.presets_folder, f"{self.current_preset_name}.json")
+        preset_path = os.path.join(self.presets_folder, "settings.json")
         
         try:
             with open(preset_path, 'w', encoding='utf-8') as f:
                 json.dump(self.current_settings, f, indent=4, ensure_ascii=False)
             
-            logger.info(f"Настройки сохранены в пресет: {self.current_preset_name}")
+            logger.info("Настройки успешно сохранены")
             return True
         except Exception as e:
             logger.error(f"Ошибка при сохранении настроек: {e}")
             return False
     
-    def load_settings(self, preset_name: str) -> bool:
+    def load_settings(self, preset_name: str = None) -> bool:
         """
         Загружает настройки из файла
         
-        Args:
-            preset_name: Имя пресета для загрузки
-            
         Returns:
             True, если настройки успешно загружены, иначе False
         """
-        preset_path = os.path.join(self.presets_folder, f"{preset_name}.json")
+        preset_path = os.path.join(self.presets_folder, "settings.json")
         
         if not os.path.exists(preset_path):
-            logger.error(f"Пресет не найден: {preset_name}")
+            logger.warning("Файл настроек не найден, используются настройки по умолчанию")
             return False
         
         try:
@@ -156,8 +145,7 @@ class ConfigManager:
             # Обновляем только те настройки, которые есть в загруженном файле
             self._update_settings_recursive(self.current_settings, loaded_settings)
             
-            self.current_preset_name = preset_name
-            logger.info(f"Настройки загружены из пресета: {preset_name}")
+            logger.info("Настройки успешно загружены")
             return True
         except Exception as e:
             logger.error(f"Ошибка при загрузке настроек: {e}")
@@ -177,54 +165,4 @@ class ConfigManager:
                 self._update_settings_recursive(target[key], value)
             else:
                 # Иначе просто заменяем значение
-                target[key] = value
-    
-    def get_presets_list(self) -> List[str]:
-        """
-        Возвращает список доступных пресетов настроек
-        
-        Returns:
-            Список имен пресетов
-        """
-        presets = []
-        
-        # Проверяем существование директории
-        if not os.path.exists(self.presets_folder):
-            return presets
-        
-        # Ищем файлы .json в директории
-        for filename in os.listdir(self.presets_folder):
-            if filename.endswith('.json'):
-                preset_name = os.path.splitext(filename)[0]
-                presets.append(preset_name)
-        
-        return presets
-    
-    def delete_preset(self, preset_name: str) -> bool:
-        """
-        Удаляет пресет с указанным именем
-        
-        Args:
-            preset_name: Имя пресета для удаления
-            
-        Returns:
-            True, если пресет успешно удален, иначе False
-        """
-        preset_path = os.path.join(self.presets_folder, f"{preset_name}.json")
-        
-        if not os.path.exists(preset_path):
-            logger.error(f"Пресет не найден: {preset_name}")
-            return False
-        
-        try:
-            os.remove(preset_path)
-            
-            # Если мы удалили текущий пресет, сбрасываем имя
-            if self.current_preset_name == preset_name:
-                self.current_preset_name = "default"
-            
-            logger.info(f"Пресет удален: {preset_name}")
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка при удалении пресета: {e}")
-            return False 
+                target[key] = value 

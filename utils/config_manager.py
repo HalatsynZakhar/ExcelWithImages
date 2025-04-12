@@ -3,8 +3,24 @@ import os
 import logging
 from typing import Dict, Any, Optional, List
 import copy
+from pathlib import Path
 
-log = logging.getLogger(__name__)
+# Setup logging
+logger = logging.getLogger(__name__)
+
+def get_downloads_folder():
+    """Возвращает путь к папке загрузок пользователя"""
+    if os.name == 'nt':  # Windows
+        import winreg
+        sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+        downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+            try:
+                return winreg.QueryValueEx(key, downloads_guid)[0]
+            except:
+                return os.path.join(os.path.expanduser('~'), 'Downloads')
+    else:  # Linux, macOS и другие
+        return os.path.join(os.path.expanduser('~'), 'Downloads')
 
 class ConfigManager:
     """
@@ -117,7 +133,7 @@ class ConfigManager:
         try:
             # Проверяем, что имя пресета не пустое
             if not preset_name:
-                log.error("Имя пресета не может быть пустым")
+                logger.error("Имя пресета не может быть пустым")
                 return False
             
             # Формируем путь к файлу пресета
@@ -129,10 +145,10 @@ class ConfigManager:
                 json.dump(self.current_settings, f, ensure_ascii=False, indent=2)
             
             self.current_preset_name = preset_name
-            log.info(f"Настройки сохранены в пресет: '{preset_name}' ({preset_path})")
+            logger.info(f"Настройки сохранены в пресет: '{preset_name}' ({preset_path})")
             return True
         except Exception as e:
-            log.error(f"Ошибка при сохранении настроек: {e}")
+            logger.error(f"Ошибка при сохранении настроек: {e}")
             return False
     
     def load_settings(self, preset_name: str) -> bool:
@@ -148,7 +164,7 @@ class ConfigManager:
         try:
             # Проверяем, что имя пресета не пустое
             if not preset_name:
-                log.error("Имя пресета не может быть пустым")
+                logger.error("Имя пресета не может быть пустым")
                 return False
             
             # Формируем путь к файлу пресета
@@ -157,7 +173,7 @@ class ConfigManager:
             
             # Проверяем, что файл существует
             if not os.path.isfile(preset_path):
-                log.error(f"Файл пресета не найден: {preset_path}")
+                logger.error(f"Файл пресета не найден: {preset_path}")
                 return False
             
             # Загружаем настройки из файла
@@ -171,10 +187,10 @@ class ConfigManager:
             
             self.current_settings = merged_settings
             self.current_preset_name = preset_name
-            log.info(f"Настройки загружены из пресета: '{preset_name}' ({preset_path})")
+            logger.info(f"Настройки загружены из пресета: '{preset_name}' ({preset_path})")
             return True
         except Exception as e:
-            log.error(f"Ошибка при загрузке настроек: {e}")
+            logger.error(f"Ошибка при загрузке настроек: {e}")
             return False
     
     def _merge_dict(self, target: Dict, source: Dict) -> None:
@@ -197,7 +213,7 @@ class ConfigManager:
         """
         self.current_settings = copy.deepcopy(self.default_settings)
         self.current_preset_name = "Default"
-        log.info("Настройки сброшены до значений по умолчанию")
+        logger.info("Настройки сброшены до значений по умолчанию")
     
     def get_presets_list(self) -> List[str]:
         """
@@ -214,7 +230,7 @@ class ConfigManager:
                     presets.append(preset_name)
             return sorted(presets)
         except Exception as e:
-            log.error(f"Ошибка при получении списка пресетов: {e}")
+            logger.error(f"Ошибка при получении списка пресетов: {e}")
             return []
     
     def delete_preset(self, preset_name: str) -> bool:
@@ -230,7 +246,7 @@ class ConfigManager:
         try:
             # Проверяем, что имя пресета не пустое
             if not preset_name:
-                log.error("Имя пресета не может быть пустым")
+                logger.error("Имя пресета не может быть пустым")
                 return False
             
             # Формируем путь к файлу пресета
@@ -239,7 +255,7 @@ class ConfigManager:
             
             # Проверяем, что файл существует
             if not os.path.isfile(preset_path):
-                log.error(f"Файл пресета не найден: {preset_path}")
+                logger.error(f"Файл пресета не найден: {preset_path}")
                 return False
             
             # Удаляем файл
@@ -249,10 +265,10 @@ class ConfigManager:
             if self.current_preset_name == preset_name:
                 self.reset_settings()
             
-            log.info(f"Пресет удален: '{preset_name}' ({preset_path})")
+            logger.info(f"Пресет удален: '{preset_name}' ({preset_path})")
             return True
         except Exception as e:
-            log.error(f"Ошибка при удалении пресета: {e}")
+            logger.error(f"Ошибка при удалении пресета: {e}")
             return False
     
     def export_settings(self, file_path: str) -> bool:
@@ -273,10 +289,10 @@ class ConfigManager:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.current_settings, f, ensure_ascii=False, indent=2)
             
-            log.info(f"Настройки экспортированы в файл: {file_path}")
+            logger.info(f"Настройки экспортированы в файл: {file_path}")
             return True
         except Exception as e:
-            log.error(f"Ошибка при экспорте настроек: {e}")
+            logger.error(f"Ошибка при экспорте настроек: {e}")
             return False
     
     def import_settings(self, file_path: str) -> bool:
@@ -292,7 +308,7 @@ class ConfigManager:
         try:
             # Проверяем, что файл существует
             if not os.path.isfile(file_path):
-                log.error(f"Файл не найден: {file_path}")
+                logger.error(f"Файл не найден: {file_path}")
                 return False
             
             # Загружаем настройки из файла
@@ -305,10 +321,10 @@ class ConfigManager:
             
             self.current_settings = merged_settings
             self.current_preset_name = "Imported"
-            log.info(f"Настройки импортированы из файла: {file_path}")
+            logger.info(f"Настройки импортированы из файла: {file_path}")
             return True
         except Exception as e:
-            log.error(f"Ошибка при импорте настроек: {e}")
+            logger.error(f"Ошибка при импорте настроек: {e}")
             return False
 
 
