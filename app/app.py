@@ -387,19 +387,6 @@ def show_settings():
             config_manager.save_settings("Default") # Assuming 'Default' preset
             log.info(f"Настройка max_total_file_size_mb изменена на: {max_total_file_size_mb}")
 
-    # --- Начальная строка (можно оставить в Дополнительно) ---
-    with st.sidebar.expander("Дополнительно", expanded=False):
-        start_row = st.number_input(
-            "Начальная строка для обработки",
-            min_value=1,
-            value=config_manager.get_setting("excel_settings.start_row", 1),
-            help="Номер строки, с которой начнется поиск артикулов (обычно 1 или 2, если есть заголовок)", # Updated help
-            key="start_row_input"
-        )
-        if start_row != config_manager.get_setting("excel_settings.start_row", 1):
-            config_manager.set_setting("excel_settings.start_row", int(start_row))
-            config_manager.save_settings("Default")
-            log.info(f"Настройка start_row изменена на: {start_row}")
 
 # Функция для отображения предпросмотра таблицы
 def show_table_preview(df):
