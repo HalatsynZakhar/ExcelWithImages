@@ -39,10 +39,10 @@ MIN_IMG_QUALITY = 30
 MIN_KB_PER_IMAGE = 10
 MAX_KB_PER_IMAGE = 2048 # 2MB max per image, prevents extreme cases
 SIZE_BUDGET_FACTOR = 0.85 # Use 85% of total size budget for images
-ROW_HEIGHT_PADDING = 15 # Pixels to add to image height for row height
+ROW_HEIGHT_PADDING = 1 # Минимальный отступ для высоты строки
 MIN_ASPECT_RATIO = 0.5 # Минимальное соотношение сторон (высота/ширина)
 MAX_ASPECT_RATIO = 2.0 # Максимальное соотношение сторон (высота/ширина)
-EXCEL_PX_TO_PT_RATIO = 1.33 # Коэффициент преобразования пикселей в пункты Excel
+EXCEL_PX_TO_PT_RATIO = 0.75 # Коэффициент преобразования пикселей в пункты Excel
 
 def ensure_temp_dir(prefix: str = "") -> str:
     """
@@ -67,14 +67,14 @@ def process_excel_file(
     output_path: Optional[str] = None,
     output_folder: Optional[str] = None,
     max_total_file_size_mb: int = 20,
-    header_row: int = 0
+    supported_formats: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp')
 ) -> Tuple[str, pd.DataFrame, int]:
     # <<< Используем print в stderr вместо logger >>>
     print(">>> ENTERING process_excel_file <<<\n", file=sys.stderr)
     sys.stderr.flush()
     
     print(f"[PROCESSOR] Начало обработки: {file_path}", file=sys.stderr)
-    print(f"[PROCESSOR] Параметры: article_col={article_col_letter}, img_folder={image_folder}, img_col={image_col_letter}, max_total_mb={max_total_file_size_mb}, header_row={header_row}", file=sys.stderr)
+    print(f"[PROCESSOR] Параметры: article_col={article_col_letter}, img_folder={image_folder}, img_col={image_col_letter}, max_total_mb={max_total_file_size_mb}", file=sys.stderr)
 
     # --- Валидация входных данных ---
     # Проверка валидности обозначений колонок
@@ -108,17 +108,19 @@ def process_excel_file(
         print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (header=0). Строк данных: {len(df)}", file=sys.stderr)
         
         # --- Загрузка книги openpyxl ---
-        wb = openpyxl.load_workbook(file_path)
+        wb = openpyxl.load_workbook(file_path, read_only=False, keep_vba=False)
         try:
+            # Всегда используем первый лист, пропускаем макросы
+            if not wb.sheetnames:
+                print("[PROCESSOR ERROR] В файле нет листов для обработки.", file=sys.stderr)
+                raise ValueError("Excel-файл не содержит листов.")
+                
+            # Используем первый лист
             ws = wb.active
-            if ws is None:
-                ws = wb.worksheets[0]
-                print("[PROCESSOR WARNING] Активный лист не определен, используем первый лист.", file=sys.stderr)
-        except IndexError:
-             print("[PROCESSOR ERROR] В файле нет листов для обработки.", file=sys.stderr)
-             raise ValueError("Excel-файл не содержит листов.")
-             
-        print(f"[PROCESSOR] Загружена рабочая книга, работаем с листом: {ws.title}", file=sys.stderr)
+            print(f"[PROCESSOR] Загружена рабочая книга, работаем с листом: {ws.title}", file=sys.stderr)
+        except Exception as e:
+            print(f"[PROCESSOR ERROR] Ошибка при выборе листа: {e}", file=sys.stderr)
+            raise ValueError(f"Ошибка при выборе листа: {e}")
         
     except Exception as e:
         err_msg = f"Ошибка при чтении Excel-файла: {e}"
@@ -237,7 +239,7 @@ def process_excel_file(
                         full_path_debug = os.path.join(image_folder, filename_debug)
                         if os.path.isfile(full_path_debug):
                             file_ext_lower_debug = os.path.splitext(filename_debug)[1].lower()
-                            supported_extensions_debug = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+                            supported_extensions_debug = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp')
                             if file_ext_lower_debug in supported_extensions_debug:
                                 name_without_ext_debug = os.path.splitext(filename_debug)[0]
                                 normalized_name_debug = image_utils.normalize_article(name_without_ext_debug)
@@ -331,18 +333,10 @@ def process_excel_file(
                     # Рассчитываем новую высоту изображения, сохраняя пропорции
                     scaled_img_height = int(DEFAULT_CELL_WIDTH_PX * aspect_ratio)
                     
-                    # Рассчитываем высоту строки с учетом отступа
-                    calculated_height = scaled_img_height + ROW_HEIGHT_PADDING
+                    # Рассчитываем высоту строки с учетом отступа (3-5 пикселей)
+                    target_row_height_pt = (scaled_img_height + ROW_HEIGHT_PADDING) * EXCEL_PX_TO_PT_RATIO
                     
-                    # Ensure the height is within the allowed range
-                    min_height = DEFAULT_CELL_HEIGHT_PX
-                    max_height = DEFAULT_CELL_HEIGHT_PX * 3  # Увеличиваем максимальную высоту
-                    target_height = min(max(calculated_height, min_height), max_height)
-                    
-                    # Преобразуем пиксели в единицы Excel с использованием константы
-                    target_row_height_pt = target_height / EXCEL_PX_TO_PT_RATIO
-                    
-                    print(f"[PROCESSOR]     Вызов set_row_height для строки {excel_row_index} на {target_row_height_pt:.1f} pt (расчет из пропорций {aspect_ratio:.2f}, высота {target_height} px)", file=sys.stderr)
+                    print(f"[PROCESSOR]     Вызов set_row_height для строки {excel_row_index} на {target_row_height_pt:.1f} pt (ширина: {DEFAULT_CELL_WIDTH_PX}px, высота: {scaled_img_height:.1f}px)", file=sys.stderr)
                     excel_utils.set_row_height(ws, excel_row_index, target_row_height_pt)
                     
                     cell_address = image_col_letter_excel + str(excel_row_index)
