@@ -536,7 +536,8 @@ def copy_worksheet(source_workbook: Workbook, source_worksheet_name: str,
         return None
 
 def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str, 
-                width: Optional[int] = None, height: Optional[int] = None) -> bool:
+                width: Optional[int] = None, height: Optional[int] = None, 
+                preserve_aspect_ratio: bool = True) -> bool:
     """
     Вставляет изображение в рабочий лист.
     
@@ -546,6 +547,7 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         anchor_cell (str): Ячейка привязки изображения (например, 'A1')
         width (Optional[int], optional): Ширина изображения в пикселях
         height (Optional[int], optional): Высота изображения в пикселях
+        preserve_aspect_ratio (bool, optional): Сохранять пропорции изображения. По умолчанию True.
     
     Returns:
         bool: True, если успешно
@@ -558,16 +560,29 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         # Создаем объект изображения
         img = XLImage(image_path)
         
-        # Устанавливаем размеры, если указаны
-        if width is not None:
+        # Получаем оригинальные размеры изображения
+        original_width = img.width
+        original_height = img.height
+        
+        # Устанавливаем размеры с сохранением пропорций, если требуется
+        if width is not None and height is not None and preserve_aspect_ratio:
+            # Если указаны оба размера, но нужно сохранить пропорции,
+            # используем ширину как основу и пересчитываем высоту
+            aspect_ratio = original_height / original_width if original_width > 0 else 1.0
             img.width = width
-        if height is not None:
-            img.height = height
+            img.height = int(width * aspect_ratio)
+            logger.debug(f"Изображение масштабировано с сохранением пропорций: {img.width}x{img.height}")
+        else:
+            # Иначе устанавливаем размеры как указано
+            if width is not None:
+                img.width = width
+            if height is not None:
+                img.height = height
             
         # Вставляем изображение
         worksheet.add_image(img, anchor_cell)
         
-        logger.debug(f"Изображение вставлено в ячейку {anchor_cell}")
+        logger.debug(f"Изображение вставлено в ячейку {anchor_cell}, размеры: {img.width}x{img.height}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при вставке изображения в ячейку {anchor_cell}: {e}")
@@ -1021,4 +1036,4 @@ def insert_images_to_excel(writer, df, image_column):
         return True
     except Exception as e:
         logger.error(f"Ошибка при вставке изображений в Excel: {e}")
-        return False 
+        return False

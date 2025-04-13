@@ -40,6 +40,9 @@ MIN_KB_PER_IMAGE = 10
 MAX_KB_PER_IMAGE = 2048 # 2MB max per image, prevents extreme cases
 SIZE_BUDGET_FACTOR = 0.85 # Use 85% of total size budget for images
 ROW_HEIGHT_PADDING = 15 # Pixels to add to image height for row height
+MIN_ASPECT_RATIO = 0.5 # Минимальное соотношение сторон (высота/ширина)
+MAX_ASPECT_RATIO = 2.0 # Максимальное соотношение сторон (высота/ширина)
+EXCEL_PX_TO_PT_RATIO = 1.33 # Коэффициент преобразования пикселей в пункты Excel
 
 def ensure_temp_dir(prefix: str = "") -> str:
     """
@@ -314,25 +317,52 @@ def process_excel_file(
                  continue
 
             # 2. ПОЛУЧЕНИЕ РАЗМЕРОВ и ВСТАВКА
-            if optimized_image_path_for_excel:
+            if optimized_image_path_for_excel and os.path.exists(optimized_image_path_for_excel):
                  print(f"[PROCESSOR]   Подготовка к вставке файла: {optimized_image_path_for_excel}", file=sys.stderr)
                  try:
                     print(f"[PROCESSOR]     Вызов get_image_dimensions для {optimized_image_path_for_excel}", file=sys.stderr)
-                    img_width_px, img_height_px = image_utils.get_image_dimensions(optimized_image_path_for_excel) or (DEFAULT_CELL_WIDTH_PX, DEFAULT_CELL_HEIGHT_PX)
+                    # Добавляем проверку на случай, если get_image_dimensions вернет None
+                    dimensions = image_utils.get_image_dimensions(optimized_image_path_for_excel)
+                    if dimensions:
+                        img_width_px, img_height_px = dimensions
+                    else:
+                        print(f"[PROCESSOR] WARNING: Не удалось получить размеры изображения, используем значения по умолчанию", file=sys.stderr)
+                        img_width_px, img_height_px = DEFAULT_CELL_WIDTH_PX, DEFAULT_CELL_HEIGHT_PX
                     print(f"[PROCESSOR]     Получены размеры: {img_width_px}x{img_height_px}", file=sys.stderr)
                     
-                    target_row_height_pt = (img_height_px + ROW_HEIGHT_PADDING) * 0.75
-                    print(f"[PROCESSOR]     Вызов set_row_height для строки {excel_row_index} на {target_row_height_pt:.1f} pt (расчет из {img_height_px + ROW_HEIGHT_PADDING} px)", file=sys.stderr)
+                    # Расчет пропорций изображения для правильной высоты строки и сохранения пропорций
+                    original_aspect_ratio = img_height_px / img_width_px if img_width_px > 0 else 1.0
+                    
+                    # Ограничиваем соотношение сторон, чтобы избежать слишком вытянутых изображений
+                    aspect_ratio = max(MIN_ASPECT_RATIO, min(original_aspect_ratio, MAX_ASPECT_RATIO))
+                    print(f"[PROCESSOR]     Соотношение сторон: оригинальное {original_aspect_ratio:.2f}, используемое {aspect_ratio:.2f}", file=sys.stderr)
+                    
+                    # Рассчитываем новую высоту изображения, сохраняя пропорции
+                    scaled_img_height = int(DEFAULT_CELL_WIDTH_PX * aspect_ratio)
+                    
+                    # Рассчитываем высоту строки с учетом отступа
+                    calculated_height = scaled_img_height + ROW_HEIGHT_PADDING
+                    
+                    # Ensure the height is within the allowed range
+                    min_height = DEFAULT_CELL_HEIGHT_PX
+                    max_height = DEFAULT_CELL_HEIGHT_PX * 3  # Увеличиваем максимальную высоту
+                    target_height = min(max(calculated_height, min_height), max_height)
+                    
+                    # Преобразуем пиксели в единицы Excel с использованием константы
+                    target_row_height_pt = target_height / EXCEL_PX_TO_PT_RATIO
+                    
+                    print(f"[PROCESSOR]     Вызов set_row_height для строки {excel_row_index} на {target_row_height_pt:.1f} pt (расчет из пропорций {aspect_ratio:.2f}, высота {target_height} px)", file=sys.stderr)
                     excel_utils.set_row_height(ws, excel_row_index, target_row_height_pt)
                     
                     cell_address = image_col_letter_excel + str(excel_row_index)
-                    print(f"[PROCESSOR]     Вызов insert_image в ячейку {cell_address} (width: {DEFAULT_CELL_WIDTH_PX}, height: {img_height_px})", file=sys.stderr)
+                    print(f"[PROCESSOR]     Вызов insert_image в ячейку {cell_address} (width: {DEFAULT_CELL_WIDTH_PX}, height: {scaled_img_height})", file=sys.stderr)
                     excel_utils.insert_image(
                         ws, 
                         optimized_image_path_for_excel,
                         anchor_cell=cell_address,
                         width=DEFAULT_CELL_WIDTH_PX,
-                        height=img_height_px
+                        height=scaled_img_height,  # Используем масштабированную высоту вместо оригинальной
+                        preserve_aspect_ratio=True  # Явно указываем сохранение пропорций
                     )
                     images_inserted += 1
                     print(f"[PROCESSOR]   Изображение успешно вставлено в ячейку {cell_address}", file=sys.stderr)
