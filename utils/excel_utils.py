@@ -825,7 +825,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
         articles_list = []
         
         # Более тщательная проверка наличия артикулов
-        for row in range(start_row, ws.max_row + 1):
+        for row in range(1, ws.max_row + 1):
             article_cell = f"{article_column}{row}"
             
             # Проверяем, что ячейка не пустая и содержит значение
@@ -866,7 +866,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
         
         # Обрабатываем каждую строку
         logger.info("Начинаем обработку строк...")
-        for row in range(start_row, ws.max_row + 1):
+        for row in range(1, ws.max_row + 1):
             article_cell = f"{article_column}{row}"
             article_value = ws[article_cell].value
             
