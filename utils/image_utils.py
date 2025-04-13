@@ -8,6 +8,7 @@ import logging
 import math
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Any, Union, Set
+import sys
 
 from PIL import Image as PILImage
 
@@ -301,85 +302,90 @@ def optimize_image(image_path: str, max_size_kb: int = 20000,
 def optimize_image_for_excel(image_path: str, max_size_kb: int = 100, 
                           quality: int = 90, min_quality: int = 30) -> io.BytesIO:
     """
-    Оптимизирует изображение для вставки в Excel без изменения размеров.
-    Уменьшает качество изображения до достижения целевого размера файла.
-    
-    Args:
-        image_path (str): Путь к изображению
-        max_size_kb (int): Максимальный размер файла в КБ
-        quality (int): Начальное качество (1-100)
-        min_quality (int): Минимальное допустимое качество (1-100)
-    
-    Returns:
-        io.BytesIO: Буфер с оптимизированным изображением
+    Оптимизирует изображение до заданного размера в КБ для вставки в Excel.
+    Сначала пробует снижать качество JPEG, если не удается - возвращает лучший результат.
     """
+    # <<< Используем print в stderr вместо logger >>>
+    print(f"  [optimize_excel] Оптимизация изображения: {image_path}", file=sys.stderr)
+    print(f"  [optimize_excel] Цель: < {max_size_kb} КБ, Качество: {quality}-{min_quality}", file=sys.stderr)
+
+    if not os.path.isfile(image_path):
+        print(f"  [optimize_excel ERROR] Файл не найден: {image_path}", file=sys.stderr)
+        return io.BytesIO() # Возвращаем пустой буфер
+
     try:
-        # Открываем изображение
         img = PILImage.open(image_path)
-        
-        # Обработка прозрачности (конвертирование в RGB)
-        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-            # Создаем новый RGB-образ с белым фоном
+        # --- Обработка прозрачности (замена на белый фон) ---
+        if img.mode == 'RGBA' or 'transparency' in img.info:
+            print("  [optimize_excel] Обнаружена прозрачность, заменяем на белый фон.", file=sys.stderr)
             background = PILImage.new('RGB', img.size, (255, 255, 255))
-            # Объединяем с исходным изображением
-            if img.mode == 'RGBA':
-                background.paste(img, mask=img.split()[3])  # 3 - альфа-канал
-            else:
-                background.paste(img, mask=img)
+            background.paste(img, mask=img.split()[3]) # 3 is the alpha channel
             img = background
-        
-        # Сохраняем изображение в буфер с оптимизацией по качеству
+        elif img.mode != 'RGB':
+             print(f"  [optimize_excel] Конвертируем изображение из {img.mode} в RGB.", file=sys.stderr)
+             img = img.convert('RGB')
+
         result_buffer = io.BytesIO()
         current_quality = quality
+        best_buffer = None
+        best_size_kb = float('inf')
+        found_within_limit = False
+
+        print("  [optimize_excel] Начало цикла снижения качества JPEG...", file=sys.stderr)
         while current_quality >= min_quality:
-            # Сбрасываем позицию буфера
             result_buffer.seek(0)
             result_buffer.truncate(0)
             
-            # Сохраняем изображение с текущим качеством
-            img.save(result_buffer, 'JPEG', quality=current_quality, optimize=True)
-            
-            # Проверяем размер
-            file_size_kb = result_buffer.tell() / 1024
-            
-            logger.debug(f"Качество: {current_quality}, размер: {file_size_kb:.2f} КБ")
-            
-            if file_size_kb <= max_size_kb:
-                break
-            
-            # Если размер файла все еще слишком большой, снижаем качество
+            try:
+                # <<< Добавляем print перед сохранением >>>
+                print(f"    [optimize_excel] Попытка сохранения JPEG с качеством={current_quality}...", file=sys.stderr)
+                img.save(result_buffer, 'JPEG', quality=current_quality, optimize=True)
+                file_size_kb = result_buffer.tell() / 1024
+                # <<< Логируем размер ПОСЛЕ сохранения >>>
+                print(f"    [optimize_excel] Попытка: качество={current_quality}, РЕАЛЬНЫЙ размер={file_size_kb:.1f} КБ", file=sys.stderr)
+                
+                # Обновляем лучший результат, если текущий УСПЕШНО сохранился и МЕНЬШЕ
+                if file_size_kb < best_size_kb:
+                    # <<< Копируем буфер для сохранения >>> 
+                    current_buffer_value = result_buffer.getvalue()
+                    best_buffer = io.BytesIO(current_buffer_value)
+                    best_size_kb = file_size_kb
+                    print(f"      -> Новый лучший результат сохранен (качество {current_quality}, размер {best_size_kb:.1f} КБ)", file=sys.stderr)
+                
+                if file_size_kb <= max_size_kb:
+                    print(f"      -> Успех! Размер ({file_size_kb:.1f} КБ) <= лимита ({max_size_kb} КБ)", file=sys.stderr)
+                    found_within_limit = True
+                    break
+                         
+            except Exception as save_e:
+                print(f"    [optimize_excel ERROR] Ошибка сохранения с качеством {current_quality}: {save_e}", file=sys.stderr)
+                # Пропускаем это качество
+
             current_quality -= 5
-        
-        # Если даже на минимальном качестве файл слишком большой,
-        # нужно будет действительно уменьшить размеры
-        if current_quality < min_quality:
-            logger.warning(f"Не удалось достичь целевого размера файла {max_size_kb} КБ. "
-                          f"Текущий размер: {file_size_kb:.2f} КБ.")
-            
-            # Сбрасываем позицию буфера
-            result_buffer.seek(0)
-            result_buffer.truncate(0)
-            
-            # Находим пропорции для изменения размера изображения
-            target_size_kb = max_size_kb * 0.9  # Берем с небольшим запасом
-            size_ratio = math.sqrt(target_size_kb / file_size_kb)
-            
-            # Новые размеры
-            new_width = int(img.width * size_ratio)
-            new_height = int(img.height * size_ratio)
-            
-            # Изменяем размер и сохраняем
-            resized_img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-            resized_img.save(result_buffer, 'JPEG', quality=min_quality, optimize=True)
-            logger.info(f"Изображение уменьшено до {new_width}x{new_height} для достижения целевого размера")
-        
-        # Возвращаем в начало буфера
-        result_buffer.seek(0)
-        
-        return result_buffer
+
+        # --- Возвращаем результат --- 
+        if best_buffer is not None:
+             final_size_kb = best_buffer.tell() / 1024
+             print(f"  [optimize_excel] Оптимизация завершена. Итоговый размер: {final_size_kb:.1f} КБ (лучший был {best_size_kb:.1f} КБ). В лимит ({max_size_kb} КБ) уложились: {found_within_limit}", file=sys.stderr)
+             best_buffer.seek(0)
+             return best_buffer
+        else:
+             print(f"  [optimize_excel ERROR] Не удалось сохранить JPEG ни с одним качеством ({quality}-{min_quality}). Попытка вернуть оригинал.", file=sys.stderr)
+             try:
+                with open(image_path, 'rb') as f_orig:
+                    # <<< Возвращаем БУФЕР с оригиналом >>>
+                    original_buffer = io.BytesIO(f_orig.read())
+                    print(f"    [optimize_excel] Возвращен буфер с оригинальным файлом ({original_buffer.tell()/1024:.1f} КБ).", file=sys.stderr)
+                    return original_buffer
+             except Exception as read_e:
+                print(f"  [optimize_excel ERROR] Ошибка чтения оригинала '{image_path}': {read_e}", file=sys.stderr)
+                return io.BytesIO() # Возвращаем пустой буфер
+
     except Exception as e:
-        logger.error(f"Ошибка при оптимизации изображения {image_path}: {e}")
-        raise
+        print(f"  [optimize_excel CRITICAL ERROR] Ошибка при оптимизации {image_path}: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+        return io.BytesIO() # Возвращаем пустой буфер при критической ошибке
 
 def process_image(image_path: str, width: Optional[int] = None, height: Optional[int] = None,
                  max_size_kb: int = 200) -> Tuple[io.BytesIO, Tuple[int, int]]:
@@ -684,84 +690,108 @@ def extract_articles_from_image_names(folder_path: str,
 def find_images_by_article(article: Any, images_folder: str, 
                          supported_extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')) -> List[str]:
     """
-    Находит все изображения по артикулу в указанной папке
-    
+    Находит все изображения, связанные с артикулом, в указанной папке.
+
     Args:
-        article (Any): Артикул для поиска
-        images_folder (str): Путь к папке с изображениями
-        supported_extensions (Tuple[str, ...]): Поддерживаемые расширения файлов
-        
+        article (Any): Артикул для поиска.
+        images_folder (str): Путь к папке с изображениями.
+        supported_extensions (Tuple[str, ...]): Поддерживаемые расширения.
+
     Returns:
-        List[str]: Список путей к найденным изображениям или пустой список, если не найдено
+        List[str]: Список путей к найденным изображениям.
     """
+    logger.debug(f"Поиск изображений для артикула '{repr(article)}' в папке '{images_folder}'")
+    found_image_paths = []
+
+    if article is None:
+        logger.warning("Пустой артикул передан в find_images_by_article")
+        return found_image_paths
+        
+    article_str = str(article).strip()
+    if not article_str:
+        logger.warning(f"Пустой артикул после strip: '{repr(article)}'")
+        return found_image_paths
+        
+    if not os.path.isdir(images_folder):
+        logger.error(f"Папка с изображениями не найдена или не является директорией: {images_folder}")
+        return found_image_paths
+
+    normalized_article_to_find = normalize_article(article_str)
+    if not normalized_article_to_find:
+        logger.warning(f"Артикул после нормализации пуст: '{article_str}'")
+        return found_image_paths
+    logger.debug(f"Нормализованный артикул для поиска: '{normalized_article_to_find}'")
+
     try:
-        if not article:
-            logger.warning("Пустой артикул")
-            return []
-            
-        if not os.path.exists(images_folder):
-            logger.error(f"Папка не найдена: {images_folder}")
-            return []
-            
-        normalized_article = normalize_article(article)
-        if not normalized_article:
-            logger.warning(f"Артикул после нормализации пуст: {article}")
-            return []
-            
-        logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article}')")
+        # <<< Логируем файлы ДО нормализации >>>
+        all_files_in_dir = os.listdir(images_folder)
+        logger.debug(f"Найдено {len(all_files_in_dir)} объектов в папке: {all_files_in_dir}")
         
-        # Проверяем, существуют ли файлы в папке
-        files = os.listdir(images_folder)
-        if not files:
-            logger.warning(f"Папка пуста: {images_folder}")
-            return []
-        
-        # Создаем словарь нормализованных имен файлов
-        file_dict = {}
+        normalized_name_to_original_path: Dict[str, str] = {}
         img_count = 0
         
-        for filename in files:
-            if any(filename.lower().endswith(ext) for ext in supported_extensions):
-                img_count += 1
-                name_without_ext = os.path.splitext(filename)[0]
-                normalized_name = normalize_article(name_without_ext)
-                file_dict[normalized_name] = filename
-                logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
+        for filename in all_files_in_dir:
+            full_path = os.path.join(images_folder, filename)
+            # Пропускаем папки
+            if not os.path.isfile(full_path):
+                logger.debug(f"  Пропускаем (не файл): {filename}")
+                continue
                 
-        logger.debug(f"Всего найдено {img_count} изображений с поддерживаемыми расширениями")
-        
-        # Список для хранения найденных изображений
-        found_images = []
-                
-        # Проверяем точное совпадение
-        if normalized_article in file_dict:
-            image_path = os.path.join(images_folder, file_dict[normalized_article])
-            logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
+            # Проверяем расширение
+            file_ext_lower = os.path.splitext(filename)[1].lower()
+            if file_ext_lower not in supported_extensions:
+                logger.debug(f"  Пропускаем (неподдерживаемое расширение {file_ext_lower}): {filename}")
+                continue
             
-            # Дополнительная проверка, что файл существует и доступен
-            if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
-                found_images.append(image_path)
+            img_count += 1
+            name_without_ext = os.path.splitext(filename)[0]
+            normalized_name = normalize_article(name_without_ext)
+            
+            # <<< Логируем нормализованное имя и путь >>>
+            logger.debug(f"  Файл: '{filename}', Нормализованное имя: '{normalized_name}', Путь: '{full_path}'")
+            
+            if normalized_name:
+                normalized_name_to_original_path[normalized_name] = full_path
             else:
-                logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
-            
-        # Проверяем частичное совпадение
-        for norm_name, filename in file_dict.items():
-            if normalized_article in norm_name or norm_name in normalized_article:
-                image_path = os.path.join(images_folder, filename)
-                # Убедимся, что это не дубликат уже найденного изображения
-                if image_path not in found_images:
-                    logger.info(f"Найдено частичное совпадение для артикула '{article}': {image_path}")
-                    
-                    # Дополнительная проверка, что файл существует и доступен
-                    if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
-                        found_images.append(image_path)
-                    else:
-                        logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                 logger.warning(f"  Получено пустое нормализованное имя для файла: {filename}")
+
+        logger.debug(f"Создан словарь нормализованных имен: {normalized_name_to_original_path}")
+        logger.debug(f"Всего найдено {img_count} файлов изображений с поддерживаемыми расширениями")
+        
+        # 1. Точное совпадение
+        logger.debug(f"Поиск точного совпадения для '{normalized_article_to_find}'")
+        if normalized_article_to_find in normalized_name_to_original_path:
+            exact_match_path = normalized_name_to_original_path[normalized_article_to_find]
+            logger.info(f"Найдено точное совпадение: '{normalized_article_to_find}' -> '{exact_match_path}'")
+            if os.access(exact_match_path, os.R_OK):
+                found_image_paths.append(exact_match_path)
+            else:
+                logger.warning(f"Файл точного совпадения недоступен для чтения: {exact_match_path}")
+        else:
+             logger.debug(f"Точное совпадение для '{normalized_article_to_find}' не найдено.")
+             
+        # 2. Частичное совпадение (если точного нет)
+        if not found_image_paths:
+            logger.debug(f"Поиск частичного совпадения для '{normalized_article_to_find}'")
+            for norm_name, original_path in normalized_name_to_original_path.items():
+                # Пропускаем, если это уже было точное совпадение (на всякий случай)
+                if norm_name == normalized_article_to_find: continue 
                 
-        if not found_images:
-            logger.warning(f"Изображения для артикула '{article}' не найдены")
-            
-        return found_images
+                # <<< Логируем проверку частичного совпадения >>>
+                logger.debug(f"  Проверяем: '{normalized_article_to_find}' in '{norm_name}' or '{norm_name}' in '{normalized_article_to_find}'")
+                if normalized_article_to_find in norm_name or norm_name in normalized_article_to_find:
+                    logger.info(f"Найдено частичное совпадение: '{normalized_article_to_find}' с '{norm_name}' -> '{original_path}'")
+                    if os.access(original_path, os.R_OK):
+                        found_image_paths.append(original_path)
+                        # Можно добавить break, если нужно только одно частичное совпадение
+                    else:
+                        logger.warning(f"Файл частичного совпадения недоступен для чтения: {original_path}")
+        
+        if not found_image_paths:
+            logger.warning(f"Изображения для артикула '{article_str}' (нормализованный: '{normalized_article_to_find}') не найдены.")
+
     except Exception as e:
-        logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
-        return [] 
+        logger.error(f"Ошибка при поиске изображений для артикула '{article_str}': {e}", exc_info=True)
+
+    logger.debug(f"Возвращаем найденные пути: {found_image_paths}")
+    return found_image_paths 
