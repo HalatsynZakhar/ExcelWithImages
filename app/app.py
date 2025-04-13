@@ -445,8 +445,21 @@ def load_excel_file(uploaded_file_arg=None):
     try:
         log.info(f"Загрузка листов из файла: {temp_file_path}")
         excel_file = pd.ExcelFile(temp_file_path, engine='openpyxl')
-        st.session_state.available_sheets = excel_file.sheet_names
-        log.info(f"Доступные листы: {st.session_state.available_sheets}")
+        all_sheets = excel_file.sheet_names
+        
+        # Фильтруем листы, исключая листы с макросами
+        filtered_sheets = [sheet for sheet in all_sheets if not sheet.startswith('xl/macrosheets/')]
+        st.session_state.available_sheets = filtered_sheets
+        log.info(f"Все листы: {all_sheets}")
+        log.info(f"Доступные листы (без макросов): {st.session_state.available_sheets}")
+        
+        # Проверяем, были ли отфильтрованы листы с макросами
+        if len(all_sheets) > len(filtered_sheets):
+            log.warning(f"Обнаружены и отфильтрованы листы с макросами: {set(all_sheets) - set(filtered_sheets)}")
+            # Если все листы были с макросами и отфильтрованы
+            if not filtered_sheets:
+                st.session_state.processing_error = "Внимание! Этот файл Excel содержит только макросы, а не обычные таблицы данных. Пожалуйста, выберите файл Excel с обычными листами, содержащими таблицы с артикулами и данными для обработки."
+                return
         
         # --- Выбор листа по умолчанию --- 
         current_selection = st.session_state.get('selected_sheet')
@@ -557,15 +570,14 @@ def handle_sheet_change():
         if st.session_state.temp_file_path and os.path.exists(st.session_state.temp_file_path):
             try:
                 selected_sheet = st.session_state.selected_sheet
-                skiprows = st.session_state.get('skiprows', 0)
-                header_row = st.session_state.get('header_row', 0)
                 
+                # Всегда используем фиксированные значения: без пропуска строк и заголовок в первой строке
                 df = pd.read_excel(
                     st.session_state.temp_file_path, 
                     sheet_name=selected_sheet, 
                     engine='openpyxl',
-                    skiprows=skiprows,
-                    header=header_row
+                    skiprows=0,
+                    header=0
                 )
                 
                 # Проверка на пустой DataFrame
@@ -608,7 +620,17 @@ def handle_sheet_change():
             except Exception as e:
                 error_msg = f"Ошибка при загрузке листа '{st.session_state.selected_sheet}': {str(e)}"
                 log.error(error_msg)
-                st.session_state.processing_error = error_msg
+                
+                # Делаем сообщение об ошибке более понятным для пользователя
+                user_friendly_msg = error_msg
+                if "'dict' object has no attribute 'shape'" in str(e):
+                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не содержит табличных данных. Пожалуйста, выберите лист с необходимыми данными."
+                elif "No sheet" in str(e) or "not found" in str(e):
+                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не найден в файле. Пожалуйста, выберите существующий лист."
+                elif "Empty" in str(e) or "no data" in str(e):
+                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не содержит данных. Пожалуйста, выберите лист с данными."
+                
+                st.session_state.processing_error = user_friendly_msg
                 st.session_state.df = None
 
 # Функция для загрузки файла Excel
@@ -763,44 +785,10 @@ def file_uploader_section():
                 add_log_message(f"Файл сохранен: {temp_file_path}", "INFO")
                 load_excel_file()
             
-            # Настройки загрузки Excel
-            with st.expander("Настройки загрузки Excel", expanded=False):
-                st.markdown("#### Параметры загрузки Excel")
-                st.write("Настройте параметры чтения файла, если в нем есть метаданные или особый формат.")
-                
-                # Инициализация переменных
-                if 'skiprows' not in st.session_state:
-                    st.session_state.skiprows = 0
-                if 'header_row' not in st.session_state:
-                    st.session_state.header_row = 0
-                    
-                # Колонки для настроек
-                col1, col2 = st.columns(2)
-                with col1:
-                    skiprows = st.number_input(
-                        "Пропустить начальные строки", 
-                        min_value=0, 
-                        max_value=50, 
-                        value=st.session_state.skiprows,
-                        help="Укажите количество строк для пропуска в начале файла",
-                        key="excel_skiprows"
-                    )
-                with col2:
-                    header_row = st.number_input(
-                        "Строка с заголовками", 
-                        min_value=0, 
-                        max_value=50, 
-                        value=st.session_state.header_row,
-                        help="Укажите номер строки с заголовками колонок (0 = первая непропущенная строка)",
-                        key="excel_header_row"
-                    )
-                    
-                # Если значения изменились, перезагружаем файл
-                if (skiprows != st.session_state.skiprows or 
-                    header_row != st.session_state.header_row):
-                    st.session_state.skiprows = skiprows
-                    st.session_state.header_row = header_row
-                    st.button("Применить настройки", on_click=load_excel_file)
+            # Удалены настройки пропуска начальных строк и строки с заголовками
+            # Инициализация переменных с фиксированными значениями
+            st.session_state.skiprows = 0
+            st.session_state.header_row = 0
                     
             # Отображение ошибки обработки, если есть
             if st.session_state.processing_error:

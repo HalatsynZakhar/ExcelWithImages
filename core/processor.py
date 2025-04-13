@@ -110,17 +110,27 @@ def process_excel_file(
         # --- Загрузка книги openpyxl ---
         wb = openpyxl.load_workbook(file_path, read_only=False, keep_vba=False)
         try:
-            # Всегда используем первый лист, пропускаем макросы
+            # Проверяем наличие листов в книге
             if not wb.sheetnames:
                 print("[PROCESSOR ERROR] В файле нет листов для обработки.", file=sys.stderr)
-                raise ValueError("Excel-файл не содержит листов.")
+                raise ValueError("Excel-файл не содержит листов. Пожалуйста, выберите файл с данными.")
+                
+            # Фильтруем листы, исключая листы с макросами
+            valid_sheets = [sheet_name for sheet_name in wb.sheetnames if not sheet_name.startswith('xl/macrosheets/')]
+            if not valid_sheets:
+                print("[PROCESSOR ERROR] В файле нет обычных листов, только макросы.", file=sys.stderr)
+                raise ValueError("Внимание! Этот файл Excel содержит только макросы, а не обычные таблицы данных. Пожалуйста, выберите файл Excel с обычными листами, содержащими таблицы с артикулами и данными для обработки.")
                 
             # Используем первый лист
             ws = wb.active
             print(f"[PROCESSOR] Загружена рабочая книга, работаем с листом: {ws.title}", file=sys.stderr)
         except Exception as e:
             print(f"[PROCESSOR ERROR] Ошибка при выборе листа: {e}", file=sys.stderr)
-            raise ValueError(f"Ошибка при выборе листа: {e}")
+            # Делаем сообщение об ошибке более понятным для пользователя
+            if "'dict' object has no attribute 'shape'" in str(e):
+                raise ValueError("Выбранный лист не содержит табличных данных. Пожалуйста, выберите лист с необходимыми данными.")
+            else:
+                raise ValueError(f"Ошибка при выборе листа: {e}")
         
     except Exception as e:
         err_msg = f"Ошибка при чтении Excel-файла: {e}"
@@ -128,7 +138,17 @@ def process_excel_file(
         # Выводим traceback в консоль
         import traceback
         traceback.print_exc(file=sys.stderr)
-        raise RuntimeError(err_msg) from e
+        
+        # Делаем сообщение об ошибке более понятным для пользователя
+        user_friendly_msg = err_msg
+        if "'dict' object has no attribute 'shape'" in str(e):
+            user_friendly_msg = "Выбранный лист не содержит табличных данных. Пожалуйста, выберите лист с необходимыми данными."
+        elif "No sheet" in str(e) or "not found" in str(e):
+            user_friendly_msg = "Указанный лист не найден в файле. Пожалуйста, выберите существующий лист."
+        elif "Empty" in str(e) or "no data" in str(e):
+            user_friendly_msg = "Выбранный лист не содержит данных. Пожалуйста, выберите лист с данными."
+            
+        raise RuntimeError(user_friendly_msg) from e
 
     if df.empty:
         err_msg = "Excel-файл не содержит данных"
