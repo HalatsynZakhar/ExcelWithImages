@@ -880,24 +880,22 @@ def file_uploader_section():
                     default_article_index = column_options.index("A") if "A" in column_options else 0
                     default_image_index = column_options.index("B") if "B" in column_options else min(1, len(column_options)-1)
                     
-                    # Позволяем пользователю выбрать колонки для обработки
+                    # Позволяем пользователю ввести буквенные обозначения колонок
                     col1, col2 = st.columns(2)
                     with col1:
-                        selected_article_col = st.selectbox(
-                            "Колонка с артикулами", 
-                            options=column_options,
-                            index=default_article_index, # Пытаемся выбрать A по умолчанию
-                            key="article_column_selector",
-                            help="Выберите колонку, содержащую артикулы товаров"
+                        selected_article_col = st.text_input(
+                            "Буква колонки с артикулами (A, B, C...)", 
+                            value="A",
+                            key="article_column_input",
+                            help="Введите букву колонки, содержащей артикулы товаров (например: A, B, C)"
                         )
-                        st.session_state.article_column = selected_article_col # Сохраняем выбранное НАЗВАНИЕ
+                        st.session_state.article_column = selected_article_col # Сохраняем выбранную букву
                     with col2:
-                        selected_image_col = st.selectbox(
-                            "Колонка для вставки изображений", 
-                            options=column_options,
-                            index=default_image_index, # Пытаемся выбрать B по умолчанию
-                            key="image_column_selector",
-                            help="Выберите колонку, куда будут вставлены изображения"
+                        selected_image_col = st.text_input(
+                            "Буква колонки для изображений (A, B, C...)", 
+                            value="B",
+                            key="image_column_input",
+                            help="Введите букву колонки для вставки изображений (например: B, C, D)"
                         )
                         st.session_state.image_column = selected_image_col # Сохраняем выбранное НАЗВАНИЕ
                     
@@ -1105,12 +1103,11 @@ def process_files():
                 # Вызываем функцию обработки (теперь она должна быть определена)
                 result_file_path, result_df, images_inserted = process_excel_file(
                     file_path=excel_file_path,
-                    article_col_name=article_col_name,
+                    article_col_letter=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
+                    image_col_letter=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
                     image_folder=images_folder,
-                    image_col_name=image_col_name,
                     output_folder=output_folder,
                     max_total_file_size_mb=current_max_mb
-                    # header_row=0, # Параметр убран из вызова
                 )
 
                 # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
@@ -1522,4 +1519,4 @@ def check_required_modules():
     return True
 
 if __name__ == "__main__":
-    main() 
+    main()

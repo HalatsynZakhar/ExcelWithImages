@@ -57,12 +57,12 @@ def ensure_temp_dir(prefix: str = "") -> str:
 
 def process_excel_file(
     file_path: str,
-    article_col_name: str,
+    article_col_letter: str,  # Буква колонки с артикулами ('A')
+    image_col_letter: str,  # Буква колонки для вставки изображений ('B')
     image_folder: str,
     image_output_folder: Optional[str] = None,
     output_path: Optional[str] = None,
     output_folder: Optional[str] = None,
-    image_col_name: str = 'Image',
     max_total_file_size_mb: int = 20,
     header_row: int = 0
 ) -> Tuple[str, pd.DataFrame, int]:
@@ -71,9 +71,24 @@ def process_excel_file(
     sys.stderr.flush()
     
     print(f"[PROCESSOR] Начало обработки: {file_path}", file=sys.stderr)
-    print(f"[PROCESSOR] Параметры: article_col={article_col_name}, img_folder={image_folder}, img_col_name={image_col_name}, max_total_mb={max_total_file_size_mb}, header_row={header_row}", file=sys.stderr)
+    print(f"[PROCESSOR] Параметры: article_col={article_col_letter}, img_folder={image_folder}, img_col={image_col_letter}, max_total_mb={max_total_file_size_mb}, header_row={header_row}", file=sys.stderr)
 
     # --- Валидация входных данных ---
+    # Проверка валидности обозначений колонок
+    try:
+        # Принимаем только буквенные обозначения колонок (A, B, C...)
+        if not (article_col_letter.isalpha() and image_col_letter.isalpha()):
+            err_msg = f"Неверное обозначение колонки: '{article_col_letter}' или '{image_col_letter}'. Используйте только буквенные обозначения (A, B, C...)"
+            print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
+            raise ValueError(err_msg)
+            
+        article_col_idx = excel_utils.column_letter_to_index(article_col_letter)
+        image_col_idx = excel_utils.column_letter_to_index(image_col_letter)
+    except Exception as e:
+        err_msg = f"Неверное обозначение колонки: '{article_col_letter}' или '{image_col_letter}'. Ошибка: {str(e)}"
+        print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
+        raise ValueError(err_msg)
+        
     if not os.path.exists(file_path):
         err_msg = f"Файл не найден: {file_path}"
         print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
@@ -116,6 +131,12 @@ def process_excel_file(
         raise ValueError(err_msg)
 
     # --- Проверка существования колонки артикулов ---
+    # Преобразуем букву колонки в индекс
+    article_col_idx = excel_utils.column_letter_to_index(article_col_letter)
+    article_col_name = df.columns[article_col_idx]
+    articles = df[article_col_name].astype(str).tolist()
+    print(f"[PROCESSOR] Получено {len(articles)} артикулов из колонки {article_col_name}", file=sys.stderr)
+    
     if article_col_name not in df.columns:
         err_msg = f"Колонка с артикулами '{article_col_name}' не найдена в файле. Доступные колонки: {list(df.columns)}"
         print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
@@ -152,6 +173,9 @@ def process_excel_file(
 
     # --- Подготовка к вставке изображений ---
     try:
+        # Определяем имя колонки для изображений на основе переданной буквы
+        image_col_name = df.columns[image_col_idx] if image_col_idx < len(df.columns) else "Изображения"
+        
         # Используем header=0
         image_col_idx_excel = excel_utils.find_column_by_header(ws, image_col_name, header_row=0)
         if image_col_idx_excel is None:
@@ -182,6 +206,8 @@ def process_excel_file(
     total_processed_image_size_kb = 0
     
     print("[PROCESSOR] --- Начало итерации по строкам DataFrame ---", file=sys.stderr)
+    
+    # Обрабатываем все строки, начиная с первой (без игнорирования)
     for df_index, row_data in df.iterrows():
         excel_row_index = df_index + 2
         rows_processed += 1
@@ -383,4 +409,4 @@ def process_excel_file(
             print(f"[PROCESSOR WARNING] Не удалось удалить временную папку {image_output_folder}: {e}", file=sys.stderr)
 
     print(f"[PROCESSOR] Обработка завершена. Вставлено изображений: {images_inserted}", file=sys.stderr)
-    return final_output_file, df, images_inserted 
+    return final_output_file, df, images_inserted
