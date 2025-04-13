@@ -176,18 +176,9 @@ def process_excel_file(
 
     # --- Подготовка к вставке изображений ---
     try:
-        # Определяем имя колонки для изображений на основе переданной буквы
-        image_col_name = df.columns[image_col_idx] if image_col_idx < len(df.columns) else "Изображения"
-        
-        # Используем header=0
-        image_col_idx_excel = excel_utils.find_column_by_header(ws, image_col_name, header_row=0)
-        if image_col_idx_excel is None:
-            image_col_idx_excel = ws.max_column + 1
-            ws.cell(row=1, column=image_col_idx_excel).value = image_col_name # Add header to row 1 (0+1)
-            print(f"[PROCESSOR] Колонка '{image_col_name}' не найдена, будет создана новая (столбец {excel_utils.get_column_letter(image_col_idx_excel)})", file=sys.stderr)
-        else:
-             print(f"[PROCESSOR] Изображения будут вставляться в существующую колонку '{image_col_name}' (столбец {excel_utils.get_column_letter(image_col_idx_excel)})", file=sys.stderr)
-        image_col_letter_excel = excel_utils.get_column_letter(image_col_idx_excel)
+        # НАПРЯМУЮ ИСПОЛЬЗУЕМ УКАЗАННУЮ БУКВУ КОЛОНКИ
+        image_col_letter_excel = image_col_letter
+        print(f"[PROCESSOR] Изображения будут вставляться в колонку: '{image_col_letter_excel}'", file=sys.stderr)
     except Exception as e:
          err_msg = f"Ошибка при подготовке колонки для изображений ('{image_col_name}'): {e}"
          print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
