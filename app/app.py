@@ -624,6 +624,32 @@ def file_uploader_section():
             margin: 20px 0;
         }
         
+        /* Увеличиваем высоту кнопок */
+        .stButton > button {
+            height: 80px !important;
+            font-size: 20px !important;
+            padding: 20px !important;
+            width: 100% !important;
+        }
+        
+        /* Специфичные стили для кнопки скачивания */
+        div[data-testid="stDownloadButton"] button {
+            height: 100px !important;
+            font-size: 24px !important;
+            padding: 25px !important;
+            width: 100% !important;
+            background-color: #4CAF50 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 8px !important;
+            transition: all 0.3s ease !important;
+        }
+        
+        div[data-testid="stDownloadButton"] button:hover {
+            background-color: #45a049 !important;
+            transform: scale(1.02) !important;
+        }
+        
         /* Стиль для сообщений об ошибках */
         .error-message {
             color: #cc0000;
@@ -855,7 +881,8 @@ def file_uploader_section():
                               disabled=process_button_disabled, 
                               type="primary", 
                               key="process_button",
-                              on_click=trigger_processing)
+                              on_click=trigger_processing,
+                              use_container_width=True)  # Добавляем параметр для растягивания на всю ширину
                     
                     # Запускаем обработку, если установлен флаг
                     if st.session_state.get('start_processing', False):
@@ -921,8 +948,9 @@ def file_uploader_section():
                             data=file,
                             file_name=os.path.basename(st.session_state.output_file_path),
                             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True, # Растянуть кнопку
-                            type="primary" # Стандартный вид основной кнопки
+                            use_container_width=True,
+                            type="primary",
+                            key="download_button"
                         )
         
         # Проверяем, нужно ли отобразить отчет о результатах обработки
