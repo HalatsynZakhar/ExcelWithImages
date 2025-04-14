@@ -132,18 +132,22 @@ def init_config_manager():
     return st.session_state.config_manager
 
 def get_downloads_folder():
-    """Получить путь к папке загрузок пользователя"""
-    if platform.system() == "Windows":
-        import winreg
-        sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
-        downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
-            downloads_folder = winreg.QueryValueEx(key, downloads_guid)[0]
-            return downloads_folder
-    elif platform.system() == "Darwin":  # macOS
-        return os.path.join(os.path.expanduser('~'), 'Downloads')
-    else:  # Linux и другие системы
-        return os.path.join(os.path.expanduser('~'), 'Downloads')
+    """Получить путь к папке с изображениями по умолчанию"""
+    # Возвращаем сетевой путь вместо папки загрузок
+    return r"\\10.10.100.2\Foto"
+    
+    # Закомментированный код ниже - оригинальная функция для получения папки загрузок
+    # if platform.system() == "Windows":
+    #     import winreg
+    #     sub_key = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders'
+    #     downloads_guid = '{374DE290-123F-4565-9164-39C4925E467B}'
+    #     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_key) as key:
+    #         downloads_folder = winreg.QueryValueEx(key, downloads_guid)[0]
+    #         return downloads_folder
+    # elif platform.system() == "Darwin":  # macOS
+    #     return os.path.join(os.path.expanduser('~'), 'Downloads')
+    # else:  # Linux и другие системы
+    #     return os.path.join(os.path.expanduser('~'), 'Downloads')
 
 # Обновляем код инициализации для использования нашей функции
 config_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'settings_presets')
