@@ -952,6 +952,12 @@ def file_uploader_section():
                             type="primary" # Стандартный вид основной кнопки
                         )
         
+        # Проверяем, нужно ли отобразить отчет о результатах обработки
+        if st.session_state.get('show_processing_report', False):
+            show_processing_report()
+            # Сбрасываем флаг, чтобы не показывать отчет повторно
+            st.session_state.show_processing_report = False
+        
         # Добавляем отображение логов вместо отладочной информации
         with st.expander("Журнал событий", expanded=False):
             # Отображаем сообщения из st.session_state.log_messages
@@ -1076,13 +1082,14 @@ def process_files():
                 add_log_message("Запуск основной обработки файла...", "INFO") # Лог для UI
 
                 # Вызываем функцию обработки (теперь она должна быть определена)
-                result_file_path, result_df, images_inserted = process_excel_file(
+                result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles = process_excel_file(
                     file_path=excel_file_path,
-                    article_col_letter=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
-                    image_col_letter=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
+                    article_col_name=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
+                    image_col_name=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
                     image_folder=images_folder,
                     output_folder=output_folder,
-                    max_total_file_size_mb=current_max_mb
+                    max_total_file_size_mb=current_max_mb,
+                    header_row=st.session_state.get('header_row', 0)
                 )
 
                 # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
@@ -1090,6 +1097,19 @@ def process_files():
                 log.info(f"  result_file_path: {result_file_path}")
                 log.info(f"  images_inserted: {images_inserted}")
                 add_log_message(f"Обработка завершена. Вставлено изображений: {images_inserted}", "SUCCESS") # Лог для UI
+                
+                # Отображаем отчет о ненайденных артикулах и артикулах с несколькими изображениями
+                if not_found_articles:
+                    log.info(f"  Не найдены изображения для {len(not_found_articles)} артикулов")
+                    add_log_message(f"Не найдены изображения для {len(not_found_articles)} артикулов", "WARNING")
+                    # Создаем список для отображения
+                    st.session_state.not_found_articles = not_found_articles
+                
+                if multiple_images_found:
+                    log.info(f"  Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов")
+                    add_log_message(f"Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов", "INFO")
+                    # Сохраняем данные для отображения
+                    st.session_state.multiple_images_found = multiple_images_found
 
                 # Проверяем, что результирующий файл создан
                 if not os.path.exists(result_file_path):
@@ -1108,6 +1128,10 @@ def process_files():
                 add_log_message(success_msg, "SUCCESS")
                 st.session_state.processing_result = success_msg
 
+                # Отображаем отчет о результатах обработки сразу после успешной обработки
+                # Вызов будет обработан после перезагрузки страницы
+                st.session_state.show_processing_report = True
+                
                 log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
                 return True
 
@@ -1192,6 +1216,14 @@ def initialize_session_state():
         st.session_state.skiprows = 0
     if 'header_row' not in st.session_state:
         st.session_state.header_row = 0
+    # Добавляем флаг для отображения отчета о результатах обработки
+    if 'show_processing_report' not in st.session_state:
+        st.session_state.show_processing_report = False
+    # Добавляем контейнеры для данных отчета
+    if 'not_found_articles' not in st.session_state:
+        st.session_state.not_found_articles = None
+    if 'multiple_images_found' not in st.session_state:
+        st.session_state.multiple_images_found = None
 
 # Функция для отображения вкладки настроек
 def settings_tab():
@@ -1492,6 +1524,56 @@ def check_required_modules():
         return False
     
     return True
+
+def show_processing_report():
+    """Отображает отчет о результатах обработки файла."""
+    if (st.session_state.get('not_found_articles') is not None or 
+            st.session_state.get('multiple_images_found') is not None):
+        
+        st.divider()
+        st.subheader("Отчет о результатах обработки")
+        
+        # Отображение информации об артикулах без изображений
+        if st.session_state.not_found_articles:
+            st.warning(f"Не найдены изображения для {len(st.session_state.not_found_articles)} артикулов")
+            with st.expander("Показать список артикулов без изображений"):
+                for article in st.session_state.not_found_articles:
+                    st.write(article)
+                
+                if len(st.session_state.not_found_articles) > 0:
+                    # Создаем CSV для скачивания
+                    csv_data = "\n".join(st.session_state.not_found_articles)
+                    st.download_button(
+                        label="Скачать список артикулов без изображений",
+                        data=csv_data,
+                        file_name="articles_without_images.csv",
+                        mime="text/csv",
+                    )
+        
+        # Отображение информации об артикулах с несколькими вариантами изображений
+        if st.session_state.multiple_images_found:
+            st.info(f"Найдено несколько вариантов изображений для {len(st.session_state.multiple_images_found)} артикулов")
+            with st.expander("Показать список артикулов с несколькими вариантами"):
+                for article, paths in st.session_state.multiple_images_found.items():
+                    st.write(f"Артикул: {article}")
+                    for i, path in enumerate(paths, 1):
+                        st.write(f"  {i}. {path}")
+                    st.write("---")
+                
+                if len(st.session_state.multiple_images_found) > 0:
+                    # Создаем CSV для скачивания
+                    csv_lines = []
+                    for article, paths in st.session_state.multiple_images_found.items():
+                        paths_str = " | ".join(paths)
+                        csv_lines.append(f"{article},{paths_str}")
+                    
+                    csv_data = "\n".join(csv_lines)
+                    st.download_button(
+                        label="Скачать список артикулов с несколькими вариантами",
+                        data=csv_data,
+                        file_name="articles_with_multiple_images.csv",
+                        mime="text/csv",
+                    )
 
 if __name__ == "__main__":
     main()

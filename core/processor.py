@@ -12,6 +12,7 @@ import openpyxl
 import shutil
 from PIL import Image as PILImage
 import re
+import io
 
 # Add parent directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -61,35 +62,52 @@ def ensure_temp_dir(prefix: str = "") -> str:
 
 def process_excel_file(
     file_path: str,
-    article_col_letter: str,  # Буква колонки с артикулами ('A')
-    image_col_letter: str,  # Буква колонки для вставки изображений ('B')
+    article_col_name: str,
     image_folder: str,
-    image_output_folder: Optional[str] = None,
-    output_path: Optional[str] = None,
-    output_folder: Optional[str] = None,
-    max_total_file_size_mb: int = 20,
-    supported_formats: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp')
-) -> Tuple[str, pd.DataFrame, int]:
+    image_col_name: str = None,
+    output_folder: str = None,
+    max_total_file_size_mb: int = 100,
+    progress_callback: callable = None,
+    config: dict = None,
+    header_row: int = 0,
+) -> Tuple[str, Optional[pd.DataFrame], int, Dict[str, List[str]], List[str]]:
+    """
+    Processes an Excel file by finding and inserting images based on article numbers.
+    
+    Args:
+        file_path: Path to the Excel file
+        article_col_name: Column name containing article numbers
+        image_folder: Folder with images to search
+        image_col_name: Column name where to insert images
+        output_folder: Folder to save the result
+        max_total_file_size_mb: Maximum file size in MB
+        progress_callback: Function to call with progress updates
+        config: Configuration parameters for image processing
+        header_row: Row index containing header (0-based)
+    
+    Returns:
+        Tuple with processing results
+    """
     # <<< Используем print в stderr вместо logger >>>
     print(">>> ENTERING process_excel_file <<<\n", file=sys.stderr)
     sys.stderr.flush()
     
     print(f"[PROCESSOR] Начало обработки: {file_path}", file=sys.stderr)
-    print(f"[PROCESSOR] Параметры: article_col={article_col_letter}, img_folder={image_folder}, img_col={image_col_letter}, max_total_mb={max_total_file_size_mb}", file=sys.stderr)
+    print(f"[PROCESSOR] Параметры: article_col={article_col_name}, img_folder={image_folder}, img_col={image_col_name}, max_total_mb={max_total_file_size_mb}", file=sys.stderr)
 
     # --- Валидация входных данных ---
     # Проверка валидности обозначений колонок
     try:
         # Принимаем только буквенные обозначения колонок (A, B, C...)
-        if not (article_col_letter.isalpha() and image_col_letter.isalpha()):
-            err_msg = f"Неверное обозначение колонки: '{article_col_letter}' или '{image_col_letter}'. Используйте только буквенные обозначения (A, B, C...)"
+        if not (article_col_name.isalpha() and image_col_name.isalpha()):
+            err_msg = f"Неверное обозначение колонки: '{article_col_name}' или '{image_col_name}'. Используйте только буквенные обозначения (A, B, C...)"
             print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
             raise ValueError(err_msg)
             
-        article_col_idx = excel_utils.column_letter_to_index(article_col_letter)
-        image_col_idx = excel_utils.column_letter_to_index(image_col_letter)
+        article_col_idx = excel_utils.column_letter_to_index(article_col_name)
+        image_col_idx = excel_utils.column_letter_to_index(image_col_name)
     except Exception as e:
-        err_msg = f"Неверное обозначение колонки: '{article_col_letter}' или '{image_col_letter}'. Ошибка: {str(e)}"
+        err_msg = f"Неверное обозначение колонки: '{article_col_name}' или '{image_col_name}'. Ошибка: {str(e)}"
         print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
         raise ValueError(err_msg)
         
@@ -158,7 +176,7 @@ def process_excel_file(
 
     # --- Проверка существования колонки артикулов ---
     # Преобразуем букву колонки в индекс
-    article_col_idx = excel_utils.column_letter_to_index(article_col_letter)
+    article_col_idx = excel_utils.column_letter_to_index(article_col_name)
     article_col_name = df.columns[article_col_idx]
     articles = df[article_col_name].astype(str).tolist()
     print(f"[PROCESSOR] Получено {len(articles)} артикулов из колонки {article_col_name}", file=sys.stderr)
@@ -188,19 +206,19 @@ def process_excel_file(
 
     # --- Подготовка папки для обработанных изображений ---
     temp_image_dir_created = False
-    if not image_output_folder:
-        image_output_folder = ensure_temp_dir("processed_images_")
+    if not image_folder:
+        image_folder = ensure_temp_dir("processed_images_")
         temp_image_dir_created = True
-        print(f"[PROCESSOR] Создана временная директория для обработанных изображений: {image_output_folder}", file=sys.stderr)
-    elif not os.path.exists(image_output_folder):
-         os.makedirs(image_output_folder)
-         print(f"[PROCESSOR] Создана папка для обработанных изображений: {image_output_folder}", file=sys.stderr)
+        print(f"[PROCESSOR] Создана временная директория для обработанных изображений: {image_folder}", file=sys.stderr)
+    elif not os.path.exists(image_folder):
+         os.makedirs(image_folder)
+         print(f"[PROCESSOR] Создана папка для обработанных изображений: {image_folder}", file=sys.stderr)
 
 
     # --- Подготовка к вставке изображений ---
     try:
         # НАПРЯМУЮ ИСПОЛЬЗУЕМ УКАЗАННУЮ БУКВУ КОЛОНКИ
-        image_col_letter_excel = image_col_letter
+        image_col_letter_excel = image_col_name
         print(f"[PROCESSOR] Изображения будут вставляться в колонку: '{image_col_letter_excel}'", file=sys.stderr)
     except Exception as e:
          err_msg = f"Ошибка при подготовке колонки для изображений ('{article_col_name}'): {e}"
@@ -224,6 +242,10 @@ def process_excel_file(
     
     print("[PROCESSOR] --- Начало итерации по строкам DataFrame ---", file=sys.stderr)
     
+    # Initialize collections for reporting
+    not_found_articles = []
+    multiple_images_found = {}
+    
     # Переменная для сохранения найденного качества сжатия первого изображения
     successful_quality = DEFAULT_IMG_QUALITY
     # Флаг для определения, было ли обработано первое изображение
@@ -233,6 +255,7 @@ def process_excel_file(
     # Начинаем с 1-й строки (после заголовка), но номер строки будет в формате Excel (от 1)
     for df_index, row in df.iterrows():
         excel_row_index = df_index + 1 + 1  # +1 потому что в Excel нумерация с 1, а header_row смещение заголовка
+        article_str = ""  # Инициализируем article_str пустой строкой
         
         try:
             # Получаем значение артикула
@@ -244,57 +267,34 @@ def process_excel_file(
                 print(f"[PROCESSOR]   Пустой артикул в строке {excel_row_index}, пропускаем", file=sys.stderr)
                 continue
             
-            # <<< ПОИСК ИЗОБРАЖЕНИЙ >>>
-            # Вместо вызова find_images_by_article встраиваем его код непосредственно:
-            # --- Начало кода из find_images_by_article ---
-            found_image_paths_debug = []
-            print(f"[PROCESSOR]   Нормализация артикула '{article_str}'", file=sys.stderr)
-            normalized_article_to_find_debug = image_utils.normalize_article(article_str)
-            print(f"[PROCESSOR]   Нормализованный артикул: '{normalized_article_to_find_debug}'", file=sys.stderr)
-            if os.path.isdir(image_folder) and normalized_article_to_find_debug:
-                try:
-                    all_files_in_dir_debug = os.listdir(image_folder)
-                    print(f"[PROCESSOR]   Найдено файлов в папке: {len(all_files_in_dir_debug)}", file=sys.stderr)
-                    normalized_name_to_original_path_debug: Dict[str, str] = {}
-                    for filename_debug in all_files_in_dir_debug:
-                        full_path_debug = os.path.join(image_folder, filename_debug)
-                        if os.path.isfile(full_path_debug):
-                            file_ext_lower_debug = os.path.splitext(filename_debug)[1].lower()
-                            if file_ext_lower_debug in supported_formats:
-                                name_without_ext_debug = os.path.splitext(filename_debug)[0]
-                                normalized_name_debug = image_utils.normalize_article(name_without_ext_debug)
-                                if normalized_name_debug:
-                                     normalized_name_to_original_path_debug[normalized_name_debug] = full_path_debug
-                    # Точное совпадение
-                    if normalized_article_to_find_debug in normalized_name_to_original_path_debug:
-                        exact_match_path_debug = normalized_name_to_original_path_debug[normalized_article_to_find_debug]
-                        print(f"[PROCESSOR]   Найдено ТОЧНОЕ совпадение: {exact_match_path_debug}", file=sys.stderr)
-                        if os.access(exact_match_path_debug, os.R_OK):
-                            found_image_paths_debug.append(exact_match_path_debug)
-                    # Частичное (если точного нет)
-                    elif not found_image_paths_debug:
-                         for norm_name_debug, original_path_debug in normalized_name_to_original_path_debug.items():
-                            if normalized_article_to_find_debug in norm_name_debug or norm_name_debug in normalized_article_to_find_debug:
-                                print(f"[PROCESSOR]   Найдено ЧАСТИЧНОЕ совпадение: {original_path_debug}", file=sys.stderr)
-                                if os.access(original_path_debug, os.R_OK):
-                                    found_image_paths_debug.append(original_path_debug)
-                                    break # Берем первое частичное
-                except Exception as find_e:
-                    print(f"[PROCESSOR]   Ошибка поиска: {find_e}", file=sys.stderr)
-            # --- Конец кода из find_images_by_article --- 
-            image_paths = found_image_paths_debug
-            print(f"[PROCESSOR]   Результат поиска изображений: {image_paths}", file=sys.stderr)
+            # Find all images for this article
+            # Определяем поддерживаемые расширения
+            supported_extensions = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp')
+            all_image_paths = image_utils.find_images_by_article_name(
+                article_str, 
+                image_folder,
+                supported_extensions,
+                search_recursively=True  # Enable recursive search for images
+            )
             
-            if not image_paths:
+            # If no images found, record and continue
+            if not all_image_paths:
                 print(f"[PROCESSOR WARNING]   Для артикула '{article_str}' (строка {excel_row_index}) не найдено изображений. Пропускаем.", file=sys.stderr)
+                # Добавляем артикул в список не найденных
+                not_found_articles.append(article_str)
                 continue
-
-            image_path = image_paths[0]
+            
+            # If multiple images found, record for report
+            if len(all_image_paths) > 1:
+                print(f"[PROCESSOR INFO]   Найдено несколько изображений для артикула '{article_str}': {len(all_image_paths)}", file=sys.stderr)
+                multiple_images_found[article_str] = all_image_paths
+                # Still proceed with the first image
+            
+            image_path = all_image_paths[0]
             print(f"[PROCESSOR]   Выбрано первое найденное изображение: {image_path}", file=sys.stderr)
 
             # 1. ОПТИМИЗАЦИЯ ИЗОБРАЖЕНИЯ
             optimized_buffer = None
-            optimized_image_path_for_excel = None
             print(f"[PROCESSOR]   Вызов optimize_image_for_excel для {image_path} с лимитом {target_kb_per_image:.1f} КБ", file=sys.stderr)
             
             try:
@@ -406,37 +406,62 @@ def process_excel_file(
                 if optimized_buffer and optimized_buffer.getbuffer().nbytes > 0:
                     buffer_size_kb = optimized_buffer.tell() / 1024
                     print(f"[PROCESSOR]   Оптимизация успешна. Размер буфера: {buffer_size_kb:.1f} КБ", file=sys.stderr)
-                    base_name, _ = os.path.splitext(os.path.basename(image_path))
-                    temp_img_filename = f"optimized_{excel_row_index}_{base_name}.jpg"
-                    optimized_image_path_for_excel = os.path.join(image_output_folder, temp_img_filename)
-                    with open(optimized_image_path_for_excel, 'wb') as f_out:
-                        f_out.write(optimized_buffer.getvalue())
                     current_image_size_kb = buffer_size_kb
                     total_processed_image_size_kb += current_image_size_kb
-                    print(f"[PROCESSOR]   Изображение оптимизировано до {current_image_size_kb:.1f}КБ и сохранено: {optimized_image_path_for_excel}", file=sys.stderr)
-                else:
-                    print(f"[PROCESSOR WARNING]   Оптимизация {image_path} вернула пустой или нулевой буфер. Пропускаем вставку.", file=sys.stderr)
-                    continue
-
-            except Exception as opt_e:
-                 print(f"[PROCESSOR WARNING]   Ошибка при оптимизации {image_path}: {opt_e}. Пропускаем вставку.", file=sys.stderr)
-                 import traceback
-                 traceback.print_exc(file=sys.stderr)
-                 continue
-
-            # 2. ПОЛУЧЕНИЕ РАЗМЕРОВ и ВСТАВКА
-            if optimized_image_path_for_excel and os.path.exists(optimized_image_path_for_excel):
-                 print(f"[PROCESSOR]   Подготовка к вставке файла: {optimized_image_path_for_excel}", file=sys.stderr)
-                 try:
-                    print(f"[PROCESSOR]     Вызов get_image_dimensions для {optimized_image_path_for_excel}", file=sys.stderr)
-                    # Добавляем проверку на случай, если get_image_dimensions вернет None
-                    dimensions = image_utils.get_image_dimensions(optimized_image_path_for_excel)
-                    if dimensions:
-                        img_width_px, img_height_px = dimensions
-                    else:
-                        print(f"[PROCESSOR] WARNING: Не удалось получить размеры изображения, используем значения по умолчанию", file=sys.stderr)
+                    
+                    # Дополнительная проверка буфера - убеждаемся, что это действительно изображение
+                    optimized_buffer.seek(0)
+                    try:
+                        verification_img = PILImage.open(optimized_buffer)
+                        img_format = verification_img.format
+                        img_width_px, img_height_px = verification_img.size
+                        print(f"[PROCESSOR]   ВЕРИФИКАЦИЯ: буфер содержит изображение формата {img_format}, {img_width_px}x{img_height_px}", file=sys.stderr)
+                        
+                        # Создаем временную копию буфера для сохранения в файл (для отладки)
+                        try:
+                            debug_copy = io.BytesIO(optimized_buffer.getvalue())
+                            temp_debug_path = os.path.join(tempfile.gettempdir(), f"debug_image_{time.time()}.jpg")
+                            with open(temp_debug_path, "wb") as debug_file:
+                                debug_file.write(debug_copy.getvalue())
+                            print(f"[PROCESSOR]   Создана отладочная копия изображения: {temp_debug_path}", file=sys.stderr)
+                        except Exception as debug_e:
+                            print(f"[PROCESSOR]   Примечание: не удалось создать отладочную копию: {debug_e}", file=sys.stderr)
+                        
+                        # Сбрасываем указатель в начало буфера после верификации
+                        optimized_buffer.seek(0)
+                    except Exception as verify_e:
+                        print(f"[PROCESSOR] ОШИБКА ВЕРИФИКАЦИИ: Буфер не содержит корректного изображения: {verify_e}", file=sys.stderr)
+                        # Пробуем сохранить проблемный буфер для анализа
+                        try:
+                            error_path = os.path.join(tempfile.gettempdir(), f"error_buffer_{time.time()}.bin")
+                            with open(error_path, "wb") as error_file:
+                                error_file.write(optimized_buffer.getvalue())
+                            print(f"[PROCESSOR]   Сохранён проблемный буфер для анализа: {error_path}", file=sys.stderr)
+                        except Exception as err_save_e:
+                            print(f"[PROCESSOR]   Не удалось сохранить проблемный буфер: {err_save_e}", file=sys.stderr)
+                            
+                        # Если буфер некорректен, пробуем загрузить оригинальное изображение
+                        try:
+                            print(f"[PROCESSOR]   Пробуем загрузить оригинальное изображение как резервный вариант", file=sys.stderr)
+                            with open(image_path, "rb") as original_file:
+                                optimized_buffer = io.BytesIO(original_file.read())
+                            print(f"[PROCESSOR]   Загружено оригинальное изображение размером {optimized_buffer.getbuffer().nbytes / 1024:.1f} КБ", file=sys.stderr)
+                            optimized_buffer.seek(0)
+                            verification_img = PILImage.open(optimized_buffer)
+                            img_width_px, img_height_px = verification_img.size
+                        except Exception as orig_load_e:
+                            print(f"[PROCESSOR] КРИТИЧЕСКАЯ ОШИБКА: Не удалось загрузить даже оригинальное изображение: {orig_load_e}", file=sys.stderr)
+                            continue  # Пропускаем эту итерацию
+                    
+                    # Получаем размеры изображения напрямую из буфера
+                    try:
+                        optimized_buffer.seek(0)
+                        img = PILImage.open(optimized_buffer)
+                        img_width_px, img_height_px = img.size
+                        print(f"[PROCESSOR]     Получены размеры из буфера: {img_width_px}x{img_height_px}", file=sys.stderr)
+                    except Exception as dim_e:
+                        print(f"[PROCESSOR] WARNING: Не удалось получить размеры изображения из буфера: {dim_e}", file=sys.stderr)
                         img_width_px, img_height_px = DEFAULT_CELL_WIDTH_PX, DEFAULT_CELL_HEIGHT_PX
-                    print(f"[PROCESSOR]     Получены размеры: {img_width_px}x{img_height_px}", file=sys.stderr)
                     
                     # Расчет пропорций изображения для правильной высоты строки и сохранения пропорций
                     original_aspect_ratio = img_height_px / img_width_px if img_width_px > 0 else 1.0
@@ -455,25 +480,36 @@ def process_excel_file(
                     excel_utils.set_row_height(ws, excel_row_index, target_row_height_pt)
                     
                     cell_address = image_col_letter_excel + str(excel_row_index)
-                    print(f"[PROCESSOR]     Вызов insert_image в ячейку {cell_address} (width: {DEFAULT_CELL_WIDTH_PX}, height: {scaled_img_height})", file=sys.stderr)
-                    excel_utils.insert_image(
-                        ws, 
-                        optimized_image_path_for_excel,
+                    print(f"[PROCESSOR]     Вызов insert_image_from_buffer в ячейку {cell_address} (width: {DEFAULT_CELL_WIDTH_PX}, height: {scaled_img_height})", file=sys.stderr)
+                    
+                    # Сбросить указатель в начало буфера
+                    optimized_buffer.seek(0)
+                    
+                    # Вставляем изображение прямо из буфера
+                    excel_utils.insert_image_from_buffer(
+                        ws,
+                        optimized_buffer,
                         anchor_cell=cell_address,
                         width=DEFAULT_CELL_WIDTH_PX,
-                        height=scaled_img_height,  # Используем масштабированную высоту вместо оригинальной
-                        preserve_aspect_ratio=True  # Явно указываем сохранение пропорций
+                        height=scaled_img_height,
+                        preserve_aspect_ratio=True
                     )
+                    
+                    # Добавляем дополнительную проверку для подтверждения успешной вставки
+                    print(f"[PROCESSOR]     Изображение вставлено в Excel с размерами {DEFAULT_CELL_WIDTH_PX}x{scaled_img_height} пикселей", file=sys.stderr)
+                    
                     images_inserted += 1
                     print(f"[PROCESSOR]   Изображение успешно вставлено в ячейку {cell_address}", file=sys.stderr)
+                else:
+                    print(f"[PROCESSOR WARNING]   Оптимизация {image_path} вернула пустой или нулевой буфер. Пропускаем вставку.", file=sys.stderr)
+                    continue
 
-                 except Exception as insert_e:
-                    print(f"[PROCESSOR ERROR]   Ошибка вставки изображения {optimized_image_path_for_excel} в строку {excel_row_index}: {insert_e}", file=sys.stderr)
-                    import traceback
-                    traceback.print_exc(file=sys.stderr)
-            else:
-                 print(f"[PROCESSOR WARNING]   Пропуск вставки: путь к оптимизированному файлу отсутствует.", file=sys.stderr)
-            
+            except Exception as opt_e:
+                 print(f"[PROCESSOR WARNING]   Ошибка при оптимизации {image_path}: {opt_e}. Пропускаем вставку.", file=sys.stderr)
+                 import traceback
+                 traceback.print_exc(file=sys.stderr)
+                 continue
+
         except Exception as row_e:
             print(f"[PROCESSOR ERROR]   Непредвиденная ошибка при обработке строки {excel_row_index} (артикул: {article_str}): {row_e}", file=sys.stderr)
             import traceback
@@ -487,41 +523,137 @@ def process_excel_file(
         print(f"[PROCESSOR WARNING] Суммарный размер оптимизированных изображений ({total_processed_image_size_mb:.2f} МБ) превышает расчетный бюджет ({image_size_budget_mb:.2f} МБ).", file=sys.stderr)
 
     # --- Формирование имени выходного файла ---
-    if output_path:
-        final_output_file = output_path
-        # Убедимся, что директория существует
-        final_output_dir = os.path.dirname(final_output_file)
-        if final_output_dir and not os.path.exists(final_output_dir):
-            os.makedirs(final_output_dir)
-    else:
-        file_name = os.path.basename(file_path)
-        name, ext = os.path.splitext(file_name)
-        output_file_name = f"{name}_processed_{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
-        
+    output_file_name = f"processed_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    
+    # Проверяем и создаем выходную папку
+    try:
         if output_folder:
-             if not os.path.exists(output_folder):
-                 os.makedirs(output_folder)
-             final_output_file = os.path.join(output_folder, output_file_name)
-        else:
-            # Сохраняем в ту же папку, что и исходный файл
-            final_output_file = os.path.join(os.path.dirname(file_path), output_file_name)
+            # Проверяем существование и доступность для записи
+            if not os.path.exists(output_folder):
+                try:
+                    os.makedirs(output_folder, exist_ok=True)
+                    print(f"[PROCESSOR] Создана папка для результатов: {output_folder}", file=sys.stderr)
+                except Exception as mkdir_e:
+                    print(f"[PROCESSOR WARNING] Не удалось создать папку {output_folder}: {mkdir_e}", file=sys.stderr)
+                    output_folder = None  # Сбрасываем, чтобы использовать альтернативный путь
+            elif not os.access(output_folder, os.W_OK):
+                print(f"[PROCESSOR WARNING] Нет прав на запись в папку {output_folder}. Будет использован альтернативный путь.", file=sys.stderr)
+                output_folder = None
+        
+        # Если папка не указана или недоступна, используем рабочую папку или временную
+        if not output_folder:
+            # Сначала пробуем папку с исходным файлом
+            src_dir = os.path.dirname(file_path)
+            if os.path.exists(src_dir) and os.access(src_dir, os.W_OK):
+                output_folder = src_dir
+                print(f"[PROCESSOR] Используем папку исходного файла для результатов: {output_folder}", file=sys.stderr)
+            else:
+                # Иначе используем временную директорию
+                output_folder = ensure_temp_dir("excel_results_")
+                print(f"[PROCESSOR] Используем временную папку для результатов: {output_folder}", file=sys.stderr)
+        
+        # Формируем полный путь к выходному файлу
+        output_file_path = os.path.join(output_folder, output_file_name)
+        print(f"[PROCESSOR] Полный путь к выходному файлу: {output_file_path}", file=sys.stderr)
+    except Exception as path_e:
+        print(f"[PROCESSOR WARNING] Ошибка при подготовке пути для сохранения: {path_e}", file=sys.stderr)
+        # В случае ошибки используем запасной вариант во временной директории
+        output_folder = ensure_temp_dir("excel_results_emergency_")
+        output_file_path = os.path.join(output_folder, output_file_name)
+        print(f"[PROCESSOR] Аварийный путь к выходному файлу: {output_file_path}", file=sys.stderr)
 
-    print(f"[PROCESSOR] Сохранение результата в файл: {final_output_file}", file=sys.stderr)
+    print(f"[PROCESSOR] Сохранение результата в файл: {output_file_path}", file=sys.stderr)
 
+    # --- Подготовка к сохранению ---
+    # Преобразуем путь в абсолютный, если это еще не сделано
+    if not os.path.isabs(output_file_path):
+        output_file_path = os.path.abspath(output_file_path)
+        print(f"[PROCESSOR] Преобразован в абсолютный путь: {output_file_path}", file=sys.stderr)
+    
+    # Печатаем информацию о директории и правах доступа
+    output_dir = os.path.dirname(output_file_path)
+    dir_exists = os.path.exists(output_dir)
+    dir_writable = os.access(output_dir, os.W_OK) if dir_exists else False
+    
+    print(f"[PROCESSOR] Информация о директории: {output_dir}", file=sys.stderr)
+    print(f"[PROCESSOR]   - Существует: {dir_exists}", file=sys.stderr)
+    print(f"[PROCESSOR]   - Доступна для записи: {dir_writable}", file=sys.stderr)
+    
+    # Если директория не существует или нет прав на запись, попробуем создать другую
+    if not dir_exists or not dir_writable:
+        fallback_dir = ensure_temp_dir("excel_fallback_")
+        fallback_path = os.path.join(fallback_dir, os.path.basename(output_file_path))
+        print(f"[PROCESSOR] Используем запасной путь из-за проблем с основным: {fallback_path}", file=sys.stderr)
+        output_file_path = fallback_path
+    
     # --- Сохранение результата ---
     try:
-        wb.save(final_output_file)
-        print(f"[PROCESSOR] Результат успешно сохранен в файл: {final_output_file}", file=sys.stderr)
+        wb.save(output_file_path)
+        print(f"[PROCESSOR] Результат успешно сохранен в файл: {output_file_path}", file=sys.stderr)
+        
+        # Очистка временных файлов изображений после успешного сохранения
+        temp_files_cleaned = 0
+        for sheet in wb.worksheets:
+            if hasattr(sheet, '_temp_image_files'):
+                for temp_path in sheet._temp_image_files:
+                    try:
+                        if os.path.exists(temp_path):
+                            os.unlink(temp_path)
+                            temp_files_cleaned += 1
+                    except Exception as e:
+                        print(f"[PROCESSOR WARNING] Не удалось удалить временный файл {temp_path}: {e}", file=sys.stderr)
+                sheet._temp_image_files = []
+        print(f"[PROCESSOR] Очищено {temp_files_cleaned} временных файлов изображений.", file=sys.stderr)
+        
+        # Добавляем проверку существования файла
+        if os.path.exists(output_file_path):
+            file_size = os.path.getsize(output_file_path)
+            print(f"[PROCESSOR] Проверка файла: {output_file_path} существует, размер: {file_size/1024:.2f} КБ", file=sys.stderr)
+        else:
+            print(f"[PROCESSOR ERROR] КРИТИЧЕСКАЯ ОШИБКА: Файл {output_file_path} не был создан после вызова save()", file=sys.stderr)
+            # Попробуем использовать абсолютный путь
+            abs_path = os.path.abspath(output_file_path)
+            print(f"[PROCESSOR] Попытка использовать абсолютный путь: {abs_path}", file=sys.stderr)
+            wb.save(abs_path)
+            output_file_path = abs_path
+            
+            if os.path.exists(output_file_path):
+                file_size = os.path.getsize(output_file_path)
+                print(f"[PROCESSOR] Успех при использовании абсолютного пути! Файл {output_file_path} создан, размер: {file_size/1024:.2f} КБ", file=sys.stderr)
+            else:
+                print(f"[PROCESSOR ERROR] КРИТИЧЕСКАЯ ОШИБКА: Файл {output_file_path} не был создан даже при использовании абсолютного пути", file=sys.stderr)
     except Exception as e:
-        err_msg = f"Ошибка при сохранении результата в {final_output_file}: {e}"
+        err_msg = f"Ошибка при сохранении результата в {output_file_path}: {e}"
         print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
         # Попытка сохранить с другим именем во временную папку
         try:
             alt_output_folder = ensure_temp_dir("save_failed_")
-            alt_output_file = os.path.join(alt_output_folder, os.path.basename(final_output_file))
+            alt_output_file = os.path.join(alt_output_folder, os.path.basename(output_file_path))
             wb.save(alt_output_file)
-            print(f"[PROCESSOR WARNING] Не удалось сохранить в {final_output_file}. Результат сохранен в {alt_output_file}", file=sys.stderr)
-            final_output_file = alt_output_file # Возвращаем альтернативный путь
+            print(f"[PROCESSOR WARNING] Не удалось сохранить в {output_file_path}. Результат сохранен в {alt_output_file}", file=sys.stderr)
+            
+            # Очистка временных файлов изображений после успешного сохранения
+            temp_files_cleaned = 0
+            for sheet in wb.worksheets:
+                if hasattr(sheet, '_temp_image_files'):
+                    for temp_path in sheet._temp_image_files:
+                        try:
+                            if os.path.exists(temp_path):
+                                os.unlink(temp_path)
+                                temp_files_cleaned += 1
+                        except Exception as e:
+                            print(f"[PROCESSOR WARNING] Не удалось удалить временный файл {temp_path}: {e}", file=sys.stderr)
+                    sheet._temp_image_files = []
+            print(f"[PROCESSOR] Очищено {temp_files_cleaned} временных файлов изображений.", file=sys.stderr)
+            
+            output_file_path = alt_output_file # Возвращаем альтернативный путь
+            
+            # Проверяем существование альтернативного файла
+            if os.path.exists(output_file_path):
+                file_size = os.path.getsize(output_file_path)
+                print(f"[PROCESSOR] Проверка альтернативного файла: {output_file_path} существует, размер: {file_size/1024:.2f} КБ", file=sys.stderr)
+            else:
+                print(f"[PROCESSOR ERROR] КРИТИЧЕСКАЯ ОШИБКА: Альтернативный файл {output_file_path} не был создан после вызова save()", file=sys.stderr)
         except Exception as alt_e:
              err_msg = f"Ошибка при сохранении результата (попытка 2) в {alt_output_file}: {alt_e}"
              print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
@@ -533,10 +665,20 @@ def process_excel_file(
     # --- Очистка временных изображений (если создавались) ---
     if temp_image_dir_created:
         try:
-            shutil.rmtree(image_output_folder)
-            print(f"[PROCESSOR] Удалена временная папка с изображениями: {image_output_folder}", file=sys.stderr)
+            shutil.rmtree(image_folder)
+            print(f"[PROCESSOR] Удалена временная папка с изображениями: {image_folder}", file=sys.stderr)
         except Exception as e:
-            print(f"[PROCESSOR WARNING] Не удалось удалить временную папку {image_output_folder}: {e}", file=sys.stderr)
+            print(f"[PROCESSOR WARNING] Не удалось удалить временную папку {image_folder}: {e}", file=sys.stderr)
 
     print(f"[PROCESSOR] Обработка завершена. Вставлено изображений: {images_inserted}", file=sys.stderr)
-    return final_output_file, df, images_inserted
+    
+    # Печатаем статистику о не найденных артикулах и артикулах с множественными изображениями
+    if not_found_articles:
+        print(f"[PROCESSOR REPORT] Не найдены изображения для {len(not_found_articles)} артикулов", file=sys.stderr)
+    
+    if multiple_images_found:
+        print(f"[PROCESSOR REPORT] Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов", file=sys.stderr)
+    
+    # Возвращаем кортеж с результатами в порядке, ожидаемом в app.py:
+    # output_file_path, result_df, images_inserted, multiple_images_found, not_found_articles
+    return output_file_path, None, images_inserted, multiple_images_found, not_found_articles

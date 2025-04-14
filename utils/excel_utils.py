@@ -5,7 +5,11 @@ import os
 import logging
 from typing import List, Dict, Tuple, Any, Optional, Union
 from pathlib import Path
+import tempfile
+import time
+import io
 
+import pandas as pd
 import openpyxl
 from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.workbook.workbook import Workbook
@@ -589,7 +593,9 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         return False
 
 def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: str,
-                           width: Optional[int] = None, height: Optional[int] = None) -> bool:
+                           width: Optional[int] = None, height: Optional[int] = None,
+                           preserve_aspect_ratio: bool = True, 
+                           anchor_type: str = "oneCellAnchor") -> bool:
     """
     Вставляет изображение из буфера в рабочий лист.
     
@@ -599,25 +605,115 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
         anchor_cell (str): Ячейка привязки изображения (например, 'A1')
         width (Optional[int], optional): Ширина изображения в пикселях
         height (Optional[int], optional): Высота изображения в пикселях
+        preserve_aspect_ratio (bool, optional): Сохранять пропорции изображения. По умолчанию True.
+        anchor_type (str, optional): Тип привязки изображения ('oneCellAnchor', 'absoluteAnchor', 'twoCellAnchor').
+                                    По умолчанию 'oneCellAnchor'.
     
     Returns:
         bool: True, если успешно
     """
     try:
-        # Создаем объект изображения из буфера
-        img = XLImage(image_buffer)
-        
-        # Устанавливаем размеры, если указаны
-        if width is not None:
-            img.width = width
-        if height is not None:
-            img.height = height
+        # Проверяем буфер на наличие данных
+        buffer_size = image_buffer.getbuffer().nbytes
+        if buffer_size == 0:
+            logger.error(f"Пустой буфер изображения для ячейки {anchor_cell}")
+            return False
             
-        # Вставляем изображение
-        worksheet.add_image(img, anchor_cell)
+        logger.debug(f"Вставка изображения из буфера в ячейку {anchor_cell}. Размер буфера: {buffer_size/1024:.2f} КБ")
         
-        logger.debug(f"Изображение из буфера вставлено в ячейку {anchor_cell}")
-        return True
+        # Сбрасываем указатель буфера в начало
+        image_buffer.seek(0)
+        
+        # Получаем размеры изображения из буфера перед созданием объекта XLImage
+        try:
+            from PIL import Image as PILImage
+            img = PILImage.open(image_buffer)
+            original_width, original_height = img.size
+            logger.debug(f"Размеры изображения из буфера: {original_width}x{original_height}")
+            # Возвращаем указатель в начало буфера после чтения размеров
+            image_buffer.seek(0)
+        except Exception as e:
+            logger.warning(f"Не удалось определить размеры изображения из буфера: {e}")
+            original_width, original_height = 100, 100  # Значения по умолчанию
+        
+        # Создаем временный файл для надежной вставки изображения
+        # Используем delete=False, чтобы файл не был удален автоматически
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+            temp_path = temp_file.name
+            temp_file.write(image_buffer.getvalue())
+            logger.debug(f"Создан временный файл для вставки: {temp_path}")
+        
+        try:
+            # Создаем объект Image с временного файла
+            img = openpyxl.drawing.image.Image(temp_path)
+            
+            # Устанавливаем размеры с учетом соотношения сторон
+            if width is not None and height is not None:
+                if preserve_aspect_ratio:
+                    # Рассчитываем соотношение сторон
+                    aspect_ratio = original_height / original_width if original_width > 0 else 1.0
+                    img.width = width
+                    img.height = int(width * aspect_ratio)
+                    logger.debug(f"Установлены размеры с сохранением пропорций: {img.width}x{img.height} (соотношение: {aspect_ratio:.2f})")
+                else:
+                    img.width = width
+                    img.height = height
+                    logger.debug(f"Установлены фиксированные размеры: {img.width}x{img.height}")
+            elif width is not None:
+                img.width = width
+                # Автоматически рассчитываем высоту для сохранения пропорций
+                aspect_ratio = original_height / original_width if original_width > 0 else 1.0
+                img.height = int(width * aspect_ratio)
+                logger.debug(f"Установлена ширина {img.width} и автоматическая высота {img.height}")
+            elif height is not None:
+                img.height = height
+                # Автоматически рассчитываем ширину для сохранения пропорций
+                aspect_ratio = original_width / original_height if original_height > 0 else 1.0
+                img.width = int(height * aspect_ratio)
+                logger.debug(f"Установлена высота {img.height} и автоматическая ширина {img.width}")
+            
+            # Вставляем изображение в ячейку
+            img.anchor = anchor_cell
+            
+            # Устанавливаем тип привязки изображения
+            if hasattr(img, 'anchor_type') and anchor_type in ['oneCellAnchor', 'absoluteAnchor', 'twoCellAnchor']:
+                img.anchor_type = anchor_type
+                logger.debug(f"Установлен тип привязки: {anchor_type}")
+            
+            # Проверяем и при необходимости увеличиваем высоту строки
+            row_num = int(''.join(filter(str.isdigit, anchor_cell)))
+            if row_num > 0 and img.height is not None:
+                # Преобразуем пиксели в единицы Excel (приблизительно)
+                excel_height = img.height * 0.75  # коэффициент конвертации
+                
+                # Устанавливаем высоту строки, если она меньше необходимой
+                current_height = worksheet.row_dimensions.get(row_num, 0)
+                current_height = current_height.height if hasattr(current_height, 'height') else 0
+                
+                if current_height < excel_height:
+                    worksheet.row_dimensions[row_num].height = excel_height
+                    logger.debug(f"Увеличена высота строки {row_num} до {excel_height}")
+            
+            worksheet.add_image(img, anchor_cell)
+            
+            # ВАЖНО: НЕ удаляем временный файл, он нужен до сохранения книги
+            # Сохраняем путь к файлу в глобальный список для последующей очистки
+            if not hasattr(worksheet, '_temp_image_files'):
+                worksheet._temp_image_files = []
+            worksheet._temp_image_files.append(temp_path)
+            logger.debug(f"Временный файл {temp_path} добавлен в список для последующей очистки")
+            
+            return True
+            
+        except Exception as add_e:
+            logger.error(f"Ошибка при добавлении изображения в ячейку {anchor_cell}: {add_e}")
+            try:
+                os.unlink(temp_path)  # Удаляем только в случае ошибки
+                logger.debug(f"Удален временный файл после ошибки: {temp_path}")
+            except Exception as del_e:
+                logger.warning(f"Не удалось удалить временный файл {temp_path}: {del_e}")
+            return False
+            
     except Exception as e:
         logger.error(f"Ошибка при вставке изображения из буфера в ячейку {anchor_cell}: {e}")
         return False
@@ -766,7 +862,6 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
     import logging
     import tempfile
     from pathlib import Path
-    import openpyxl
     from PIL import Image as PILImage
     from . import image_utils
     
@@ -903,20 +998,10 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                     
                     logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
                     
-                    # Создаем временный файл для изображения
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_img:
-                        temp_img.write(img_buffer.getvalue())
-                        temp_img_path = temp_img.name
-                    
-                    logger.debug(f"Создан временный файл изображения: {temp_img_path}")
-                    
                     # Вставляем изображение в ячейку
                     try:
                         # Получаем букву столбца и номер строки
                         cell_address = f"{image_column}{row}"
-                        
-                        # Вставляем изображение
-                        img = openpyxl.drawing.image.Image(temp_img_path)
                         
                         # Если нужно настроить высоту строки
                         if adjust_cell_size:
@@ -925,14 +1010,24 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                             ws.row_dimensions[row].height = row_height_excel
                             logger.debug(f"Установлена высота строки {row}: {row_height_excel} ед. ({row_height} пикс.)")
                         
-                        # Добавляем изображение как есть, без изменения размеров
-                        ws.add_image(img, cell_address)
+                        # Определяем ширину и высоту на основе пропорций изображения
+                        aspect_ratio = original_height / original_width if original_width > 0 else 1.0
+                        width_px = row_height  # Используем высоту строки как базовую ширину
+                        height_px = int(width_px * aspect_ratio)
+                        
+                        # Используем insert_image_from_buffer вместо создания временного файла
+                        img_buffer.seek(0)  # Сбрасываем указатель в начало буфера
+                        insert_image_from_buffer(
+                            worksheet=ws,
+                            image_buffer=img_buffer,
+                            anchor_cell=cell_address,
+                            width=width_px,
+                            height=height_px,
+                            preserve_aspect_ratio=True
+                        )
+                        
                         stats["images_inserted"] += 1
-                        
                         logger.info(f"Изображение вставлено в ячейку {cell_address}")
-                        
-                        # Удаляем временный файл
-                        os.unlink(temp_img_path)
                         
                     except Exception as e:
                         logger.error(f"Ошибка при вставке изображения в ячейку {cell_address}: {e}")
@@ -1037,3 +1132,182 @@ def insert_images_to_excel(writer, df, image_column):
     except Exception as e:
         logger.error(f"Ошибка при вставке изображений в Excel: {e}")
         return False
+
+def save_dataframe_with_images(excel_file: str, df: pd.DataFrame, 
+                         article_column: str, image_column: str, images_folder: str,
+                         max_size_kb: int = 100, 
+                         adjust_cell_size: bool = True,
+                         row_height: int = 120,
+                         find_images_recursive: bool = True) -> Dict[str, Any]:
+    """
+    Сохраняет DataFrame в Excel файл с изображениями на основе артикулов
+    
+    Args:
+        excel_file (str): Путь к Excel файлу для сохранения
+        df (pd.DataFrame): DataFrame с данными
+        article_column (str): Название колонки с артикулами
+        image_column (str): Название колонки для вставки изображений
+        images_folder (str): Путь к папке с изображениями
+        max_size_kb (int): Максимальный размер файла изображения в KB
+        adjust_cell_size (bool): Настраивать ли размер ячейки автоматически
+        row_height (int): Высота строки в пикселях (если adjust_cell_size=True)
+        find_images_recursive (bool): Искать ли изображения рекурсивно в подпапках
+        
+    Returns:
+        Dict[str, Any]: Статистика обработки
+    """
+    try:
+        logger.info(f"Начинаем обработку Excel файла: {excel_file}")
+        logger.info(f"Артикулы в колонке: {article_column}, изображения в колонке: {image_column}")
+        logger.info(f"Папка с изображениями: {images_folder}")
+        
+        # Проверяем входные данные
+        if not os.path.isdir(images_folder):
+            logger.error(f"Папка с изображениями не найдена: {images_folder}")
+            raise FileNotFoundError(f"Папка с изображениями не найдена: {images_folder}")
+            
+        if article_column not in df.columns:
+            logger.error(f"Колонка с артикулами '{article_column}' не найдена в DataFrame")
+            raise ValueError(f"Колонка с артикулами '{article_column}' не найдена в DataFrame")
+            
+        # Статистика
+        stats = {
+            "start_time": time.time(),
+            "total_articles": 0,
+            "images_found": 0,
+            "images_inserted": 0,
+            "processing_time": 0,
+            "output_file": ""
+        }
+        
+        # Создаем рабочую книгу Excel и лист
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        
+        # Проставляем заголовки
+        for col_idx, col_name in enumerate(df.columns, 1):
+            ws.cell(row=1, column=col_idx).value = col_name
+        
+        # Устанавливаем ширину колонки с изображениями
+        # Находим индекс колонки с изображениями
+        image_column_index = None
+        for col_idx, col_name in enumerate(df.columns, 1):
+            if col_name == image_column:
+                image_column_index = col_idx
+                break
+        
+        if image_column_index is not None:
+            image_column_letter = get_column_letter(image_column_index)
+            ws.column_dimensions[image_column_letter].width = 20  # Примерная ширина для изображений
+            logger.debug(f"Установлена ширина колонки с изображениями {image_column_letter}: 20")
+        else:
+            logger.warning(f"Колонка с изображениями '{image_column}' не найдена в DataFrame")
+            image_column_letter = 'B'  # Значение по умолчанию
+        
+        # Заполняем данные и вставляем изображения
+        for df_idx, row_data in df.iterrows():
+            excel_row = df_idx + 2  # +2 из-за заголовка и 1-индексации Excel
+            
+            # Заполняем данные из DataFrame
+            for col_idx, col_name in enumerate(df.columns, 1):
+                ws.cell(row=excel_row, column=col_idx).value = row_data[col_name]
+            
+            # Обрабатываем изображение
+            article = row_data.get(article_column)
+            if pd.notna(article) and article:
+                stats["total_articles"] += 1
+                
+                # Ищем изображение по артикулу
+                found_images = image_utils.find_images_by_article_name(
+                    article, 
+                    images_folder,
+                    search_recursively=find_images_recursive
+                )
+                
+                if found_images:
+                    stats["images_found"] += 1
+                    image_path = found_images[0]  # Берем первое найденное изображение
+                    logger.info(f"Найдено изображение для артикула '{article}': {image_path}")
+                    
+                    try:
+                        # Получаем оригинальные размеры изображения
+                        original_width, original_height = image_utils.get_image_dimensions(image_path)
+                        logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
+                        
+                        # Обрабатываем изображение только с оптимизацией качества,
+                        # но без принудительного изменения размеров
+                        img_buffer = image_utils.optimize_image_for_excel(
+                            image_path=image_path,
+                            max_size_kb=max_size_kb
+                        )
+                        
+                        logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
+                        
+                        # Вставляем изображение в ячейку
+                        try:
+                            # Получаем букву столбца и номер строки
+                            cell_address = f"{image_column_letter}{excel_row}"
+                            
+                            # Если нужно настроить высоту строки
+                            if adjust_cell_size:
+                                # Устанавливаем высоту строки (1 единица ≈ 0.75 пункта)
+                                row_height_excel = row_height * 0.75  # Приблизительное преобразование пикселей в единицы высоты строки
+                                ws.row_dimensions[excel_row].height = row_height_excel
+                                logger.debug(f"Установлена высота строки {excel_row}: {row_height_excel} ед. ({row_height} пикс.)")
+                            
+                            # Определяем ширину и высоту на основе пропорций изображения
+                            aspect_ratio = original_height / original_width if original_width > 0 else 1.0
+                            width_px = row_height  # Используем высоту строки как базовую ширину
+                            height_px = int(width_px * aspect_ratio)
+                            
+                            # Используем insert_image_from_buffer вместо создания временного файла
+                            img_buffer.seek(0)  # Сбрасываем указатель в начало буфера
+                            insert_image_from_buffer(
+                                worksheet=ws,
+                                image_buffer=img_buffer,
+                                anchor_cell=cell_address,
+                                width=width_px,
+                                height=height_px,
+                                preserve_aspect_ratio=True
+                            )
+                            
+                            stats["images_inserted"] += 1
+                            logger.info(f"Изображение вставлено в ячейку {cell_address}")
+                            
+                        except Exception as e:
+                            logger.error(f"Ошибка при вставке изображения в ячейку {cell_address}: {e}")
+                            # Продолжаем обработку других строк
+                    
+                    except Exception as e:
+                        logger.error(f"Ошибка при обработке изображения для артикула '{article}': {e}")
+                        # Продолжаем обработку других строк
+                else:
+                    logger.warning(f"Изображение для артикула '{article}' не найдено")
+            else:
+                logger.warning(f"Изображение для артикула '{article}' не найдено")
+        
+        # Сохраняем файл
+        output_file = f"{os.path.splitext(excel_file)[0]}_with_images.xlsx"
+        logger.info(f"Сохраняем результат в файл: {output_file}")
+        
+        # Если файл уже существует, сначала удаляем его
+        if os.path.exists(output_file):
+            os.remove(output_file)
+            logger.info(f"Удален существующий файл: {output_file}")
+        
+        wb.save(output_file)
+        logger.info(f"Файл сохранен: {output_file}")
+        
+        # Обновляем статистику
+        stats["end_time"] = time.time()
+        stats["processing_time"] = stats["end_time"] - stats["start_time"]
+        stats["output_file"] = output_file
+        
+        logger.info(f"Обработка завершена. Статистика: артикулов - {stats['total_articles']}, " + 
+                    f"найдено изображений - {stats['images_found']}, вставлено - {stats['images_inserted']}")
+        
+        return stats
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при обработке Excel файла: {e}")
+        raise
