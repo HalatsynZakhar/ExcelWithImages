@@ -93,6 +93,16 @@ def start_web_app():
     # Очищаем временные файлы перед запуском
     clean_temp_directory()
     
+    # Проверяем и устанавливаем зависимости перед запуском приложения
+    print("Проверка и установка необходимых зависимостей...")
+    requirements_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
+    if os.path.exists(requirements_file):
+        subprocess.run([sys.executable, "-m", "pip", "install", "-r", requirements_file])
+    else:
+        print("Файл requirements.txt не найден, устанавливаем основные зависимости...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "openpyxl>=3.0.10", "Pillow>=9.0.0", 
+                        "streamlit>=1.18.0", "numpy>=1.21.0", "pandas>=1.3.5"])
+    
     app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "app.py")
     
     if not os.path.exists(app_path):
@@ -272,17 +282,38 @@ if __name__ == "__main__":
     
     args = parse_args()
     
-    # Проверка наличия модуля streamlit
-    try:
-        import streamlit
-    except ImportError:
-        print("Установка необходимых зависимостей...")
+    # Проверка наличия необходимых модулей
+    required_modules = {
+        "streamlit": "streamlit",
+        "openpyxl": "openpyxl",
+        "PIL": "Pillow",
+        "pandas": "pandas"
+    }
+    
+    missing_modules = []
+    
+    for module_name, pip_package in required_modules.items():
+        try:
+            __import__(module_name)
+            print(f"✓ Модуль {module_name} установлен")
+        except ImportError:
+            print(f"✗ Модуль {module_name} не установлен")
+            missing_modules.append(pip_package)
+    
+    # Устанавливаем отсутствующие зависимости
+    if missing_modules:
+        print(f"Установка отсутствующих зависимостей: {', '.join(missing_modules)}...")
+        # Сначала пробуем установить из requirements.txt
         requirements_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "requirements.txt")
         if os.path.exists(requirements_file):
+            print(f"Устанавливаем зависимости из {requirements_file}...")
             subprocess.run([sys.executable, "-m", "pip", "install", "-r", requirements_file])
         else:
-            print("Файл requirements.txt не найден, устанавливаем основные зависимости...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "openpyxl", "Pillow", "streamlit"])
+            # Если файла нет, устанавливаем только отсутствующие пакеты
+            print("Файл requirements.txt не найден, устанавливаем отсутствующие зависимости...")
+            for package in missing_modules:
+                print(f"Установка {package}...")
+                subprocess.run([sys.executable, "-m", "pip", "install", package])
     
     # Проверка каталогов
     examples_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples", "sample_data")
