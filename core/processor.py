@@ -127,8 +127,14 @@ def process_excel_file(
     try:
         # Если указан конкретный лист, читаем его
         if sheet_name:
-            df = pd.read_excel(file_path, sheet_name=sheet_name, header=0, engine='openpyxl')
-            print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (sheet={sheet_name}, header=0). Строк данных: {len(df)}", file=sys.stderr)
+            df = pd.read_excel(
+                file_path,
+                sheet_name=sheet_name,
+                engine='openpyxl',
+                skiprows=0,
+                header=None
+            )
+            print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (sheet={sheet_name}, header=None). Строк данных: {len(df)}", file=sys.stderr)
         else:
             df = pd.read_excel(file_path, header=0, engine='openpyxl') 
             print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (header=0). Строк данных: {len(df)}", file=sys.stderr)
@@ -274,7 +280,7 @@ def process_excel_file(
     # --- Итерация по строкам ---
     # Начинаем с 1-й строки (после заголовка), но номер строки будет в формате Excel (от 1)
     for df_index, row in df.iterrows():
-        excel_row_index = df_index + 1 + 1  # +1 потому что в Excel нумерация с 1, а header_row смещение заголовка
+        excel_row_index = df_index + 1  # Убираем +1, так как теперь нет смещения из-за header=None
         article_str = ""  # Инициализируем article_str пустой строкой
         
         try:

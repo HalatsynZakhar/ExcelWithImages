@@ -544,7 +544,7 @@ def handle_sheet_change():
                 sheet_name=selected_sheet, 
                 engine='openpyxl',
                 skiprows=0,
-                header=0
+                header=None
             )
             
             # Преобразуем все столбцы с объектами в строки для предотвращения ошибок с pyarrow
