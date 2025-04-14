@@ -112,9 +112,6 @@ def init_config_manager():
             # Логируем установку пути по умолчанию
             log.info(f"Установлен путь к папке с изображениями по умолчанию: {downloads_folder}")
             
-        if not config_manager_instance.get_setting('paths.output_folder_path'):
-            config_manager_instance.set_setting('paths.output_folder_path', downloads_folder)
-            
         if not config_manager_instance.get_setting('excel_settings.max_file_size_mb'):
             config_manager_instance.set_setting('excel_settings.max_file_size_mb', 20)
             
@@ -309,65 +306,58 @@ def update_sidebar_buttons():
     ):
         config_manager.reset_settings()
         st.session_state['current_settings'] = config_manager.get_config_manager().current_settings
-        config_manager.set_setting("paths.output_folder_path", get_downloads_folder())
-        config_manager.set_setting("paths.images_folder_path", os.path.join(get_downloads_folder(), "images"))
+        
+        # Устанавливаем путь к изображениям
+        downloads_folder = get_downloads_folder()
+        images_path = os.path.join(downloads_folder, "images")
+        config_manager.set_setting("paths.images_folder_path", images_path)
+        st.session_state.images_folder_path = images_path
+        
+        # Устанавливаем стандартные буквы колонок
         config_manager.set_setting("excel_settings.article_column", "A")
         config_manager.set_setting("excel_settings.image_column", "B")
+        
+        # Перезагружаем страницу для применения настроек
         st.session_state['needs_rerun'] = True
 
 # Функция для отображения настроек
 def show_settings():
     config_manager = st.session_state.config_manager
 
-    # --- Настройки путей ---
+    # --- Настройки путей к папкам ---
     with st.sidebar.expander("Настройки путей", expanded=True):
         # Получаем текущие значения из конфига
         config_manager = st.session_state.config_manager
         current_image_folder = config_manager.get_setting('paths.images_folder_path')
-        current_output_folder = config_manager.get_setting('paths.output_folder_path')
         
         # Добавляем пояснение
-        st.markdown("### Пути к папкам")
-        st.markdown("Укажите пути к папкам для работы с файлами. Эти пути будут сохранены для последующих сессий.")
+        st.markdown("### Путь к папке с изображениями")
+        st.markdown("Укажите путь к папке с изображениями, которые нужно вставить в Excel файл.")
         
-        col1, col2 = st.columns(2)
+        # Отображаем текстовое поле для пути к папке с изображениями
+        image_folder = st.text_input(
+            "Путь к папке с изображениями",
+            value=st.session_state.get('images_folder_path', current_image_folder),
+            help="Укажите путь к папке, где хранятся изображения товаров"
+        )
         
-        with col1:
-            # Отображаем текстовое поле для пути к папке с изображениями
-            image_folder = st.text_input(
-                "Путь к папке с изображениями",
-                value=current_image_folder,
-                help="Укажите путь к папке, где хранятся изображения товаров"
-            )
+        # Если путь изменился, сохраняем его в конфиг и session_state
+        if image_folder != current_image_folder:
+            config_manager.set_setting('paths.images_folder_path', image_folder)
+            config_manager.save_settings("Default")
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.images_folder_path = image_folder
+            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
             
-            # Если путь изменился, сохраняем его в конфиг
-            if image_folder != current_image_folder:
-                config_manager.set_setting('paths.images_folder_path', image_folder)
-                config_manager.save_settings("Default")
-                log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
-        
-        with col2:
-            # Отображаем текстовое поле для пути к папке результатов
-            output_folder = st.text_input(
-                "Путь к папке результатов",
-                value=current_output_folder,
-                help="Укажите путь к папке, куда будут сохраняться обработанные файлы"
-            )
-            
-            # Если путь изменился, сохраняем его в конфиг
-            if output_folder != current_output_folder:
-                config_manager.set_setting('paths.output_folder_path', output_folder)
-                config_manager.save_settings("Default")
-                log.info(f"Сохранен новый путь к папке результатов: {output_folder}")
-            
-        # Добавляем кнопку сброса путей к значениям по умолчанию
-        if st.button("Сбросить пути к значениям по умолчанию"):
+        # Добавляем кнопку сброса пути к значениям по умолчанию
+        if st.button("Сбросить путь к папке изображений"):
             downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
-            config_manager.set_setting('paths.output_folder_path', downloads_folder)
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.images_folder_path = downloads_folder
             config_manager.save_settings("Default")
-            st.success(f"Пути сброшены на папку загрузок: {downloads_folder}")
-            log.info(f"Пути сброшены на папку загрузок: {downloads_folder}")
+            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
     
     # --- Настройки размера файла ---
     with st.sidebar.expander("Размер файла", expanded=True):
@@ -386,7 +376,6 @@ def show_settings():
             config_manager.set_setting('excel_settings.max_total_file_size_mb', max_total_file_size_mb)
             config_manager.save_settings("Default") # Assuming 'Default' preset
             log.info(f"Настройка max_total_file_size_mb изменена на: {max_total_file_size_mb}")
-
 
 # Функция для отображения предпросмотра таблицы
 def show_table_preview(df):
@@ -995,7 +984,8 @@ def process_files():
         # Показываем крутящийся индикатор загрузки
         with st.spinner("Идет обработка файла. Пожалуйста, подождите..."):
             # Получаем необходимые настройки
-            images_folder = config_manager.get_setting("paths.images_folder_path", "")
+            images_folder = st.session_state.get('images_folder_path', 
+                                               config_manager.get_setting("paths.images_folder_path", ""))
     
             # Создаем директорию для хранения результатов
             temp_dir = ensure_temp_dir()
@@ -1007,12 +997,15 @@ def process_files():
             conditions = {
                 "DataFrame загружен": st.session_state.df is not None,
                 "Временный файл существует": st.session_state.temp_file_path is not None,
-                "Файл доступен": os.path.exists(st.session_state.temp_file_path) if st.session_state.temp_file_path else False,
+                "Файл доступен": (os.path.exists(st.session_state.temp_file_path) and 
+                                  os.access(st.session_state.temp_file_path, os.R_OK)) if st.session_state.temp_file_path else False,
                 "Выбран лист": st.session_state.selected_sheet is not None,
                 "Указана колонка с артикулами": st.session_state.get('article_column') is not None,
                 "Указана колонка с изображениями": st.session_state.get('image_column') is not None,
                 "Папка изображений указана": images_folder != "",
-                "Папка изображений существует": os.path.exists(images_folder) if images_folder else False
+                "Папка изображений существует": os.path.exists(images_folder) if images_folder else False,
+                "Папка изображений доступна": (os.path.exists(images_folder) and 
+                                           os.access(images_folder, os.R_OK | os.X_OK)) if images_folder else False
             }
             
             # Логируем все условия
@@ -1224,17 +1217,96 @@ def initialize_session_state():
         st.session_state.not_found_articles = None
     if 'multiple_images_found' not in st.session_state:
         st.session_state.multiple_images_found = None
+    # Сохраняем путь к папке с изображениями в session_state для сохранения между перезагрузками
+    if 'images_folder_path' not in st.session_state:
+        st.session_state.images_folder_path = config_manager.get_setting("paths.images_folder_path", "")
 
-# Функция для отображения вкладки настроек
+# Функция для отображения вкладки настроек в боковой панели
 def settings_tab():
     """
     Отображает вкладку настроек в боковой панели.
     """
-    # Показываем текущие настройки с префиксом sidebar_
-    show_custom_settings("sidebar_")
+    st.sidebar.title("Настройки")
     
-    # Добавляем кнопки для управления настройками
-    update_sidebar_buttons()
+    # --- Настройки путей к папкам ---
+    with st.sidebar.expander("Настройки путей", expanded=True):
+        config_manager = st.session_state.config_manager
+        current_image_folder = st.session_state.get('images_folder_path', 
+                                                  config_manager.get_setting('paths.images_folder_path'))
+        
+        st.markdown("### Путь к папке с изображениями")
+        image_folder = st.text_input(
+            "Путь к папке с изображениями",
+            value=current_image_folder,
+            key="sidebar_image_folder_path",
+            help="Укажите путь к папке, где хранятся изображения товаров"
+        )
+        
+        # Если путь изменился, сохраняем его в конфиг и session_state
+        if image_folder != current_image_folder:
+            config_manager.set_setting('paths.images_folder_path', image_folder)
+            st.session_state.images_folder_path = image_folder
+            config_manager.save_settings("Default")
+            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
+        
+        # Добавляем кнопку сброса путей к значениям по умолчанию
+        if st.button("Сбросить путь", key="sidebar_reset_path_button"):
+            downloads_folder = get_downloads_folder()
+            config_manager.set_setting('paths.images_folder_path', downloads_folder)
+            st.session_state.images_folder_path = downloads_folder
+            config_manager.save_settings("Default")
+            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
+    
+    # --- Настройки размера файла ---
+    with st.sidebar.expander("Размер файла", expanded=True):
+        st.subheader("Ограничение размера")
+        
+        max_total_file_size_mb = st.number_input(
+            "Максимальный размер файла Excel (МБ)",
+            min_value=1, # Minimum 1MB
+            max_value=100, # Maximum 100MB
+            value=int(config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)), 
+            step=1, # Step 1MB
+            help="Приблизительный максимальный размер итогового Excel-файла. Изображения будут сжаты для достижения этого лимита.",
+            key="sidebar_max_file_size_mb"
+        )
+        if max_total_file_size_mb != config_manager.get_setting('excel_settings.max_total_file_size_mb', 20):
+            config_manager.set_setting('excel_settings.max_total_file_size_mb', max_total_file_size_mb)
+            config_manager.save_settings("Default")
+            log.info(f"Настройка максимального размера файла изменена на: {max_total_file_size_mb} МБ")
+    
+    # Добавляем кнопку для полного сброса настроек
+    st.sidebar.markdown("""
+    <style>
+    div[data-testid="stButton"] button[kind="secondary"] {
+        background-color: #FF5555;
+        color: white;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    if st.sidebar.button(
+        'Сбросить все настройки', 
+        key='reset_button', 
+        help="Сбрасывает все настройки к значениям по умолчанию",
+        type="secondary"  # Используем secondary для применения стиля
+    ):
+        config_manager.reset_settings()
+        st.session_state['current_settings'] = config_manager.get_config_manager().current_settings
+        
+        # Устанавливаем путь к изображениям
+        downloads_folder = get_downloads_folder()
+        images_path = os.path.join(downloads_folder, "images")
+        config_manager.set_setting("paths.images_folder_path", images_path)
+        st.session_state.images_folder_path = images_path
+        
+        # Устанавливаем стандартные буквы колонок
+        config_manager.set_setting("excel_settings.article_column", "A")
+        config_manager.set_setting("excel_settings.image_column", "B")
+        
+        # Перезагружаем страницу для применения настроек
+        st.session_state['needs_rerun'] = True
 
 # Функция для проверки новых изображений в папке
 def check_new_images_in_folder():
@@ -1265,50 +1337,34 @@ def show_custom_settings(key_prefix="", use_expanders=True):
         # Получаем текущие значения из конфига
         config_manager = st.session_state.config_manager
         current_image_folder = config_manager.get_setting('paths.images_folder_path')
-        current_output_folder = config_manager.get_setting('paths.output_folder_path')
         
         # Добавляем пояснение
-        st.markdown("### Пути к папкам")
-        st.markdown("Укажите пути к папкам для работы с файлами. Эти пути будут сохранены для последующих сессий.")
+        st.markdown("### Путь к папке с изображениями")
+        st.markdown("Укажите путь к папке с изображениями, которые нужно вставить в Excel файл.")
         
-        col1, col2 = st.columns(2)
+        # Отображаем текстовое поле для пути к папке с изображениями
+        image_folder = st.text_input(
+            "Путь к папке с изображениями",
+            value=st.session_state.get('images_folder_path', current_image_folder),
+            key=f"{key_prefix}image_folder_path",
+            help="Укажите путь к папке, где хранятся изображения товаров"
+        )
         
-        with col1:
-            # Отображаем текстовое поле для пути к папке с изображениями
-            image_folder = st.text_input(
-                "Путь к папке с изображениями",
-                value=current_image_folder,
-                help="Укажите путь к папке, где хранятся изображения товаров"
-            )
+        # Если путь изменился, сохраняем его в конфиг и session_state
+        if image_folder != current_image_folder:
+            config_manager.set_setting('paths.images_folder_path', image_folder)
+            st.session_state.images_folder_path = image_folder
+            config_manager.save_settings("Default")
+            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
             
-            # Если путь изменился, сохраняем его в конфиг
-            if image_folder != current_image_folder:
-                config_manager.set_setting('paths.images_folder_path', image_folder)
-                config_manager.save_settings("Default")
-                log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
-        
-        with col2:
-            # Отображаем текстовое поле для пути к папке результатов
-            output_folder = st.text_input(
-                "Путь к папке результатов",
-                value=current_output_folder,
-                help="Укажите путь к папке, куда будут сохраняться обработанные файлы"
-            )
-            
-            # Если путь изменился, сохраняем его в конфиг
-            if output_folder != current_output_folder:
-                config_manager.set_setting('paths.output_folder_path', output_folder)
-                config_manager.save_settings("Default")
-                log.info(f"Сохранен новый путь к папке результатов: {output_folder}")
-            
-        # Добавляем кнопку сброса путей к значениям по умолчанию
-        if st.button("Сбросить пути к значениям по умолчанию"):
+        # Добавляем кнопку сброса пути к значениям по умолчанию
+        if st.button("Сбросить путь к папке изображений", key=f"{key_prefix}reset_path_button"):
             downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
-            config_manager.set_setting('paths.output_folder_path', downloads_folder)
+            st.session_state.images_folder_path = downloads_folder
             config_manager.save_settings("Default")
-            st.success(f"Пути сброшены на папку загрузок: {downloads_folder}")
-            log.info(f"Пути сброшены на папку загрузок: {downloads_folder}")
+            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
     
     # Функция для отображения настроек изображений
     def show_image_settings():
@@ -1329,12 +1385,13 @@ def show_custom_settings(key_prefix="", use_expanders=True):
             "Максимальный размер Excel-файла (МБ)",
             min_value=1,
             max_value=100,
-            value=int(config_manager.get_setting('excel_settings.max_file_size_mb', 20)),
+            value=int(config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)),
+            key=f"{key_prefix}max_file_size_mb",
             help="Максимальный размер результирующего Excel-файла в мегабайтах"
         )
         
-        if max_file_size_mb != config_manager.get_setting('excel_settings.max_file_size_mb'):
-            config_manager.set_setting('excel_settings.max_file_size_mb', max_file_size_mb)
+        if max_file_size_mb != config_manager.get_setting('excel_settings.max_total_file_size_mb'):
+            config_manager.set_setting('excel_settings.max_total_file_size_mb', max_file_size_mb)
             config_manager.save_settings("Default")
             log.info(f"Установлен максимальный размер Excel-файла: {max_file_size_mb} МБ")
         
@@ -1350,6 +1407,7 @@ def show_custom_settings(key_prefix="", use_expanders=True):
             min_value=1,
             max_value=100,
             value=int(config_manager.get_setting('image_settings.quality', 80)),
+            key=f"{key_prefix}quality",
             help="Качество сжатия изображений (от 1 до 100)"
         )
         
@@ -1359,8 +1417,8 @@ def show_custom_settings(key_prefix="", use_expanders=True):
             log.info(f"Установлено качество изображений: {quality}")
         
         # Добавляем кнопку сброса настроек к значениям по умолчанию
-        if st.button("Сбросить настройки изображений"):
-            config_manager.set_setting('excel_settings.max_file_size_mb', 20)
+        if st.button("Сбросить настройки изображений", key=f"{key_prefix}reset_image_settings"):
+            config_manager.set_setting('excel_settings.max_total_file_size_mb', 20)
             config_manager.set_setting('image_settings.quality', 80)
             config_manager.save_settings("Default")
             st.success("Настройки изображений сброшены к значениям по умолчанию")
@@ -1419,8 +1477,7 @@ def main():
     # --- Боковая панель ТОЛЬКО с настройками ---
     with st.sidebar:
         st.header("Настройки")
-        show_settings() # Показываем настройки путей, размера файла и т.д.
-        update_sidebar_buttons() # Кнопка сброса настроек
+        settings_tab() # Показываем настройки путей, размера файла и т.д.
     # --- Конец Боковой панели ---
 
     # --- Главный раздел приложения ---
