@@ -271,10 +271,6 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"Не удалось создать тестовое изображение: {e}")
     
-    # Запуск по аргументам
-    if args.web:
-        start_web_app()
-    elif args.console:
-        start_console_mode()
-    else:
-        main_menu() 
+    # Автоматически запускаем веб-интерфейс без отображения меню
+    print("Запуск веб-интерфейса ExcelWithImages...")
+    start_web_app()
