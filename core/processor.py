@@ -70,6 +70,7 @@ def process_excel_file(
     progress_callback: callable = None,
     config: dict = None,
     header_row: int = 0,
+    sheet_name: str = None,  # Добавляем параметр для имени листа
 ) -> Tuple[str, Optional[pd.DataFrame], int, Dict[str, List[str]], List[str]]:
     """
     Processes an Excel file by finding and inserting images based on article numbers.
@@ -84,6 +85,7 @@ def process_excel_file(
         progress_callback: Function to call with progress updates
         config: Configuration parameters for image processing
         header_row: Row index containing header (0-based)
+        sheet_name: Name of the sheet to process (if None, uses active sheet)
     
     Returns:
         Tuple with processing results
@@ -93,7 +95,7 @@ def process_excel_file(
     sys.stderr.flush()
     
     print(f"[PROCESSOR] Начало обработки: {file_path}", file=sys.stderr)
-    print(f"[PROCESSOR] Параметры: article_col={article_col_name}, img_folder={image_folder}, img_col={image_col_name}, max_total_mb={max_total_file_size_mb}", file=sys.stderr)
+    print(f"[PROCESSOR] Параметры: article_col={article_col_name}, img_folder={image_folder}, img_col={image_col_name}, max_total_mb={max_total_file_size_mb}, sheet_name={sheet_name}", file=sys.stderr)
 
     # --- Валидация входных данных ---
     # Проверка валидности обозначений колонок
@@ -123,8 +125,13 @@ def process_excel_file(
 
     # --- Чтение Excel ---
     try:
-        df = pd.read_excel(file_path, header=0, engine='openpyxl') 
-        print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (header=0). Строк данных: {len(df)}", file=sys.stderr)
+        # Если указан конкретный лист, читаем его
+        if sheet_name:
+            df = pd.read_excel(file_path, sheet_name=sheet_name, header=0, engine='openpyxl')
+            print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (sheet={sheet_name}, header=0). Строк данных: {len(df)}", file=sys.stderr)
+        else:
+            df = pd.read_excel(file_path, header=0, engine='openpyxl') 
+            print(f"[PROCESSOR] Excel-файл прочитан в DataFrame (header=0). Строк данных: {len(df)}", file=sys.stderr)
         
         # --- Загрузка книги openpyxl ---
         wb = openpyxl.load_workbook(file_path, read_only=False, keep_vba=False)
@@ -139,10 +146,19 @@ def process_excel_file(
             if not valid_sheets:
                 print("[PROCESSOR ERROR] В файле нет обычных листов, только макросы.", file=sys.stderr)
                 raise ValueError("Внимание! Этот файл Excel содержит только макросы, а не обычные таблицы данных. Пожалуйста, выберите файл Excel с обычными листами, содержащими таблицы с артикулами и данными для обработки.")
-                
-            # Используем первый лист
-            ws = wb.active
-            print(f"[PROCESSOR] Загружена рабочая книга, работаем с листом: {ws.title}", file=sys.stderr)
+            
+            # Если указан лист, выбираем его, иначе используем активный
+            if sheet_name:
+                if sheet_name in wb.sheetnames:
+                    ws = wb[sheet_name]
+                    print(f"[PROCESSOR] Работаем с указанным листом: {sheet_name}", file=sys.stderr)
+                else:
+                    print(f"[PROCESSOR ERROR] Указанный лист {sheet_name} не найден в файле. Доступные листы: {wb.sheetnames}", file=sys.stderr)
+                    raise ValueError(f"Лист '{sheet_name}' не найден в файле. Доступные листы: {wb.sheetnames}")
+            else:
+                # Используем первый лист
+                ws = wb.active
+                print(f"[PROCESSOR] Загружена рабочая книга, работаем с активным листом: {ws.title}", file=sys.stderr)
         except Exception as e:
             print(f"[PROCESSOR ERROR] Ошибка при выборе листа: {e}", file=sys.stderr)
             # Делаем сообщение об ошибке более понятным для пользователя

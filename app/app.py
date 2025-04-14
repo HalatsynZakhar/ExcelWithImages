@@ -431,6 +431,8 @@ def load_excel_file(uploaded_file_arg=None):
         # Устанавливаем лист по умолчанию, если он еще не выбран или текущий выбор невалиден
         if default_sheet and (not current_selection or current_selection not in st.session_state.available_sheets):
              st.session_state.selected_sheet = default_sheet
+             # Устанавливаем sheet_selector для корректной работы handle_sheet_change
+             st.session_state.sheet_selector = default_sheet
              log.info(f"Установлен активный лист: {st.session_state.selected_sheet}")
              # Сбрасываем DataFrame, т.к. лист изменился (или был установлен впервые)
              st.session_state.df = None 
@@ -440,7 +442,7 @@ def load_excel_file(uploaded_file_arg=None):
         # Вызываем handle_sheet_change, чтобы загрузить данные для ВЫБРАННОГО листа
         # (это также обработает случай, когда лист был только что установлен по умолчанию)
         if st.session_state.selected_sheet:
-            handle_sheet_change() # Эта функция загрузит df и обработает ошибки
+            handle_sheet_change()  # Эта функция загрузит df и обработает ошибки
         else:
              # Если листов нет или выбрать по умолчанию не удалось
              st.session_state.df = None
@@ -520,76 +522,85 @@ def handle_sheet_change():
     """
     Обрабатывает изменение выбранного листа Excel и перезагружает данные.
     """
-    if st.session_state.get("sheet_selector") != st.session_state.selected_sheet:
+    # Обновляем выбранный лист из селектора, если он был изменен
+    if 'sheet_selector' in st.session_state and st.session_state.get("sheet_selector") != st.session_state.selected_sheet:
         st.session_state.selected_sheet = st.session_state.get("sheet_selector")
-        log.info(f"Выбран новый лист: {st.session_state.selected_sheet}")
+        log.info(f"Выбран новый лист из селектора: {st.session_state.selected_sheet}")
+    
+    # Проверяем, что у нас есть выбранный лист
+    selected_sheet = st.session_state.get('selected_sheet')
+    if not selected_sheet:
+        log.warning("Не выбран лист для загрузки данных")
+        st.session_state.df = None
+        st.session_state.processing_error = "Не выбран лист для загрузки данных"
+        return
         
-        # Перезагружаем данные с нового листа
-        if st.session_state.temp_file_path and os.path.exists(st.session_state.temp_file_path):
-            try:
-                selected_sheet = st.session_state.selected_sheet
-                
-                # Всегда используем фиксированные значения: без пропуска строк и заголовок в первой строке
-                df = pd.read_excel(
-                    st.session_state.temp_file_path, 
-                    sheet_name=selected_sheet, 
-                    engine='openpyxl',
-                    skiprows=0,
-                    header=0
-                )
-                
-                # Проверка на пустой DataFrame
-                log.info(f"Размер данных при смене листа: строк={df.shape[0]}, колонок={df.shape[1]}; пустой={df.empty}")
-                
-                if df.empty:
-                    error_msg = f"Лист '{selected_sheet}' не содержит данных"
-                    log.warning(error_msg)
-                    st.session_state.processing_error = error_msg
-                    st.session_state.df = None
-                    return
-                
-                if df.shape[0] == 0:
-                    error_msg = f"Лист '{selected_sheet}' не содержит строк с данными"
-                    log.warning(error_msg)
-                    st.session_state.processing_error = error_msg
-                    st.session_state.df = None
-                    return
-                    
-                if df.shape[1] == 0:
-                    error_msg = f"Лист '{selected_sheet}' не содержит колонок с данными"
-                    log.warning(error_msg)
-                    st.session_state.processing_error = error_msg
-                    st.session_state.df = None
-                    return
-                
-                # Проверка на файл, который имеет колонки, но все значения в них NaN
-                if df.notna().sum().sum() == 0:
-                    error_msg = f"Лист '{selected_sheet}' содержит только пустые ячейки"
-                    log.warning(error_msg)
-                    st.session_state.processing_error = error_msg
-                    st.session_state.df = None
-                    return
-                
-                # Все хорошо, сохраняем DataFrame
-                st.session_state.df = df
-                st.session_state.processing_error = None
-                log.info(f"Лист '{selected_sheet}' успешно загружен. Найдено {len(df)} строк и {len(df.columns)} колонок")
-                
-            except Exception as e:
-                error_msg = f"Ошибка при загрузке листа '{st.session_state.selected_sheet}': {str(e)}"
-                log.error(error_msg)
-                
-                # Делаем сообщение об ошибке более понятным для пользователя
-                user_friendly_msg = error_msg
-                if "'dict' object has no attribute 'shape'" in str(e):
-                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не содержит табличных данных. Пожалуйста, выберите лист с необходимыми данными."
-                elif "No sheet" in str(e) or "not found" in str(e):
-                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не найден в файле. Пожалуйста, выберите существующий лист."
-                elif "Empty" in str(e) or "no data" in str(e):
-                    user_friendly_msg = f"Лист '{st.session_state.selected_sheet}' не содержит данных. Пожалуйста, выберите лист с данными."
-                
-                st.session_state.processing_error = user_friendly_msg
+    # Перезагружаем данные с выбранного листа
+    if st.session_state.temp_file_path and os.path.exists(st.session_state.temp_file_path):
+        try:
+            log.info(f"Загрузка данных с листа: {selected_sheet}")
+            
+            # Всегда используем фиксированные значения: без пропуска строк и заголовок в первой строке
+            df = pd.read_excel(
+                st.session_state.temp_file_path, 
+                sheet_name=selected_sheet, 
+                engine='openpyxl',
+                skiprows=0,
+                header=0
+            )
+            
+            # Проверка на пустой DataFrame
+            log.info(f"Размер данных при смене листа: строк={df.shape[0]}, колонок={df.shape[1]}; пустой={df.empty}")
+            
+            if df.empty:
+                error_msg = f"Лист '{selected_sheet}' не содержит данных"
+                log.warning(error_msg)
+                st.session_state.processing_error = error_msg
                 st.session_state.df = None
+                return
+            
+            if df.shape[0] == 0:
+                error_msg = f"Лист '{selected_sheet}' не содержит строк с данными"
+                log.warning(error_msg)
+                st.session_state.processing_error = error_msg
+                st.session_state.df = None
+                return
+                
+            if df.shape[1] == 0:
+                error_msg = f"Лист '{selected_sheet}' не содержит колонок с данными"
+                log.warning(error_msg)
+                st.session_state.processing_error = error_msg
+                st.session_state.df = None
+                return
+            
+            # Проверка на файл, который имеет колонки, но все значения в них NaN
+            if df.notna().sum().sum() == 0:
+                error_msg = f"Лист '{selected_sheet}' содержит только пустые ячейки"
+                log.warning(error_msg)
+                st.session_state.processing_error = error_msg
+                st.session_state.df = None
+                return
+            
+            # Все хорошо, сохраняем DataFrame
+            st.session_state.df = df
+            st.session_state.processing_error = None
+            log.info(f"Лист '{selected_sheet}' успешно загружен. Найдено {len(df)} строк и {len(df.columns)} колонок")
+            
+        except Exception as e:
+            error_msg = f"Ошибка при загрузке листа '{selected_sheet}': {str(e)}"
+            log.error(error_msg)
+            
+            # Делаем сообщение об ошибке более понятным для пользователя
+            user_friendly_msg = error_msg
+            if "'dict' object has no attribute 'shape'" in str(e):
+                user_friendly_msg = f"Лист '{selected_sheet}' не содержит табличных данных. Пожалуйста, выберите лист с необходимыми данными."
+            elif "No sheet" in str(e) or "not found" in str(e):
+                user_friendly_msg = f"Лист '{selected_sheet}' не найден в файле. Пожалуйста, выберите существующий лист."
+            elif "Empty" in str(e) or "no data" in str(e):
+                user_friendly_msg = f"Лист '{selected_sheet}' не содержит данных. Пожалуйста, выберите лист с данными."
+            
+            st.session_state.processing_error = user_friendly_msg
+            st.session_state.df = None
 
 # Функция для загрузки файла Excel
 def file_uploader_section():
@@ -1022,15 +1033,12 @@ def process_files():
             # внутри функции process_files в app.py
 
             try:
-                # Сначала сохраняем выбранный лист во временный файл (если он есть)
-                if selected_sheet:
-                    # (Этот блок кода остается как был)
-                    log.info(f"Чтение Excel-файла с листа {selected_sheet}")
-                    df = pd.read_excel(excel_file_path, sheet_name=selected_sheet, engine='openpyxl')
-                    temp_file_with_sheet = os.path.join(output_folder, f"temp_sheet_{timestamp}.xlsx")
-                    df.to_excel(temp_file_with_sheet, index=False)
-                    log.info(f"Сохранен временный файл с выбранным листом: {temp_file_with_sheet}")
-                    excel_file_path = temp_file_with_sheet
+                # Сначала копируем весь оригинальный файл вместо сохранения только выбранного листа
+                log.info(f"Создание копии оригинального Excel-файла")
+                temp_file_with_full_copy = os.path.join(output_folder, f"temp_full_{timestamp}.xlsx")
+                shutil.copy2(excel_file_path, temp_file_with_full_copy)
+                log.info(f"Создана полная копия исходного файла: {temp_file_with_full_copy}")
+                excel_file_path = temp_file_with_full_copy
 
                 # <<< ЛОГ ПЕРЕД ВЫЗОВОМ >>>
                 log.info("--- Готовимся к вызову process_excel_file ---")
@@ -1039,11 +1047,12 @@ def process_files():
                 log.info(f"  image_col_name: {image_col_name}")
                 log.info(f"  image_folder: {images_folder}")
                 log.info(f"  output_folder: {output_folder}")
+                log.info(f"  selected_sheet: {selected_sheet}")  # Добавляем выбранный лист в лог
                 current_max_mb = config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)
                 log.info(f"  max_total_file_size_mb: {current_max_mb}")
                 add_log_message("Запуск основной обработки файла...", "INFO") # Лог для UI
 
-                # Вызываем функцию обработки (теперь она должна быть определена)
+                # Вызываем функцию обработки, передавая имя листа
                 result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles = process_excel_file(
                     file_path=excel_file_path,
                     article_col_name=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
@@ -1051,7 +1060,8 @@ def process_files():
                     image_folder=images_folder,
                     output_folder=output_folder,
                     max_total_file_size_mb=current_max_mb,
-                    header_row=st.session_state.get('header_row', 0)
+                    header_row=st.session_state.get('header_row', 0),
+                    sheet_name=selected_sheet  # Добавляем передачу имени листа
                 )
 
                 # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
