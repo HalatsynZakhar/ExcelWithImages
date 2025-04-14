@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 def normalize_article(article: Any) -> str:
     """
-    Нормализует артикул для поиска
+    Нормализует артикул для поиска. Сохраняет дефисы, подчеркивания и точки.
     
     Args:
         article (Any): Артикул в любом формате
@@ -28,7 +28,7 @@ def normalize_article(article: Any) -> str:
     if article is None:
         return ""
         
-    # Преобразуем в строку
+    # Преобразуем в строку и удаляем пробелы в начале и конце
     article_str = str(article).strip()
     
     # Если строка пустая, возвращаем пустую строку
@@ -38,19 +38,9 @@ def normalize_article(article: Any) -> str:
     # Удаляем все пробелы внутри строки - они часто источник проблем при сравнении
     article_str = article_str.replace(" ", "")
     
-    # Заменяем разные виды разделителей на единый формат
-    # Заменяем точки, запятые, слеши, подчёркивания на дефисы для унификации
-    unified_article = re.sub(r'[.,/\\_ ]', '-', article_str)
-    
-    # Удаляем все нецифровые и небуквенные символы, кроме дефиса
-    # Сохраняем русские и английские буквы, цифры и дефисы
-    normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я\-]', '', unified_article).lower()
-    
-    # Убираем повторяющиеся дефисы
-    normalized = re.sub(r'-+', '-', normalized)
-    
-    # Убираем дефисы в начале и конце
-    normalized = normalized.strip('-')
+    # Удаляем все нецифровые и небуквенные символы, КРОМЕ дефисов, нижних подчеркиваний и точек
+    # Сохраняем русские и английские буквы, цифры, дефисы, нижние подчеркивания и точки
+    normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я\-_\.]', '', article_str).lower()
     
     return normalized
 
@@ -951,40 +941,10 @@ def find_images_by_article_name(article: Any, images_folder: str,
             logger.info(f"Найдены точные совпадения после нормализации ({len(found_image_paths)} шт.) для артикула '{article}'")
             return found_image_paths
         
-        # 3. Если не нашли точных совпадений, ищем строковое вхождение артикула в имя файла без нормализации
-        for normalized_name, file_info in normalized_name_to_path.items():
-            file_original_name = file_info["original_name"]
-            if original_article in file_original_name or file_original_name in original_article:
-                image_path = file_info["filepath"]
-                logger.debug(f"Найдено вхождение строки для артикула '{article}' в имени файла '{file_original_name}': {image_path}")
-                
-                if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
-                    found_image_paths.append(image_path)
-                else:
-                    logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
-        
-        # Если нашли частичные совпадения без нормализации, возвращаем их
-        if found_image_paths:
-            logger.info(f"Найдены частичные строковые совпадения ({len(found_image_paths)} шт.) для артикула '{article}'")
-            return found_image_paths
-                
-        # 4. Если все еще не нашли, ищем частичные совпадения после нормализации    
-        for normalized_name, file_info in normalized_name_to_path.items():
-            if normalized_article_to_find in normalized_name or normalized_name in normalized_article_to_find:
-                image_path = file_info["filepath"]
-                logger.debug(f"Найдено частичное совпадение для нормализованного артикула '{normalized_article_to_find}' в '{normalized_name}': {image_path}")
-                
-                if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
-                    found_image_paths.append(image_path)
-                else:
-                    logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
-                        
-        if not found_image_paths:
-            logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
-        else:
-            logger.info(f"Найдено {len(found_image_paths)} изображений для артикула '{article}' после всех проверок")
+        # Если не найдены точные совпадения, ничего не возвращаем
+        logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
+        return []
             
-        return found_image_paths
     except Exception as e:
         logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
         import traceback

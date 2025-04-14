@@ -348,33 +348,27 @@ def show_settings():
 
 # Функция для отображения предпросмотра таблицы
 def show_table_preview(df):
-    """Показывает превью загруженной таблицы.
-    
-    Args:
-        df (pd.DataFrame): DataFrame для отображения
     """
-    with st.expander("Предпросмотр загруженного файла", expanded=True):
-        # Общее количество строк
-        st.write(f"**Общее количество строк:** {len(df)}")
-        
-        # Получаем количество непустых значений в каждой колонке
-        column_stats = {}
-        for col in df.columns:
-            if col not in ['image', 'image_path', 'image_width', 'image_height']:
-                non_empty_count = df[col].notna().sum()
-                column_stats[col] = non_empty_count
-        
-        # Выводим статистику по колонкам
-        st.write("**Количество непустых значений в колонках:**")
-        stats_df = pd.DataFrame({
-            'Колонка': column_stats.keys(),
-            'Непустых значений': column_stats.values()
-        })
-        st.dataframe(stats_df, use_container_width=True)
-        
-        # Показываем первые 5 строк таблицы
-        st.write("**Первые 5 строк:**")
-        st.dataframe(df.head(), use_container_width=True)
+    Отображает предпросмотр таблицы с данными
+    """
+    if df is not None and not df.empty:
+        try:
+            # Преобразуем все столбцы с объектами в строки для предотвращения ошибок с pyarrow
+            for col in df.select_dtypes(include=['object']).columns:
+                df[col] = df[col].astype(str)
+                
+            # Выводим предпросмотр таблицы
+            st.write("### Предпросмотр таблицы")
+            
+            # Отображаем только первые 10 строк для предпросмотра
+            st.dataframe(df.head(10), use_container_width=True)
+            
+            # Отображаем информацию о количестве строк
+            st.write(f"Всего строк в таблице: **{len(df)}**")
+        except Exception as e:
+            st.error(f"Ошибка при отображении предпросмотра таблицы: {e}")
+    else:
+        st.warning("Таблица пуста или не загружена.")
 
 # Функция для загрузки Excel файла
 def load_excel_file(uploaded_file_arg=None):
@@ -549,6 +543,10 @@ def handle_sheet_change():
                 header=0
             )
             
+            # Преобразуем все столбцы с объектами в строки для предотвращения ошибок с pyarrow
+            for col in df.select_dtypes(include=['object']).columns:
+                df[col] = df[col].astype(str)
+            
             # Проверка на пустой DataFrame
             log.info(f"Размер данных при смене листа: строк={df.shape[0]}, колонок={df.shape[1]}; пустой={df.empty}")
             
@@ -598,7 +596,9 @@ def handle_sheet_change():
                 user_friendly_msg = f"Лист '{selected_sheet}' не найден в файле. Пожалуйста, выберите существующий лист."
             elif "Empty" in str(e) or "no data" in str(e):
                 user_friendly_msg = f"Лист '{selected_sheet}' не содержит данных. Пожалуйста, выберите лист с данными."
-            
+            elif "ArrowTypeError" in str(e) or "Expected bytes" in str(e):
+                user_friendly_msg = f"Ошибка преобразования типов данных. Попробуйте выбрать другой лист или перезагрузить файл."
+                
             st.session_state.processing_error = user_friendly_msg
             st.session_state.df = None
 

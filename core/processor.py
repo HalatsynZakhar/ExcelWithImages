@@ -194,7 +194,11 @@ def process_excel_file(
     # Преобразуем букву колонки в индекс
     article_col_idx = excel_utils.column_letter_to_index(article_col_name)
     article_col_name = df.columns[article_col_idx]
-    articles = df[article_col_name].astype(str).tolist()
+    
+    # Принудительно конвертируем значения артикулов в строковый тип
+    df[article_col_name] = df[article_col_name].astype(str)
+    
+    articles = df[article_col_name].tolist()
     print(f"[PROCESSOR] Получено {len(articles)} артикулов из колонки {article_col_name}", file=sys.stderr)
     
     if article_col_name not in df.columns:
