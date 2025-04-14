@@ -30,7 +30,8 @@ def ensure_project_structure():
         "logs",
         "settings_presets",
         "utils",
-        "utils/config_manager"
+        "utils/config_manager",
+        "temp"
     ]
     
     # Создаем все необходимые директории
@@ -49,6 +50,35 @@ def ensure_project_structure():
     if not os.path.exists(os.path.join(root_dir, "app/app.py")):
         print("ВНИМАНИЕ: Отсутствует файл app/app.py")
 
+# Функция для очистки временных файлов
+def clean_temp_directory():
+    """
+    Удаляет все файлы в папке temp при запуске приложения
+    """
+    # Путь к директории temp
+    temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "temp")
+    
+    # Проверяем существование директории
+    if os.path.exists(temp_dir) and os.path.isdir(temp_dir):
+        print("Очистка временных файлов...")
+        # Перебираем все файлы в директории temp
+        for filename in os.listdir(temp_dir):
+            file_path = os.path.join(temp_dir, filename)
+            try:
+                # Если это файл, удаляем его
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                    print(f"Удален временный файл: {filename}")
+                # Если это папка, удаляем её со всем содержимым
+                elif os.path.isdir(file_path):
+                    shutil.rmtree(file_path)
+                    print(f"Удалена временная папка: {filename}")
+            except Exception as e:
+                print(f"Ошибка при удалении {file_path}: {e}")
+        print("Очистка временных файлов завершена")
+    else:
+        print("Директория temp не существует или не является директорией")
+
 # Функция для очистки консоли
 def clear_screen():
     """Очищает экран консоли в зависимости от операционной системы"""
@@ -60,6 +90,9 @@ def clear_screen():
 # Функция для запуска веб-интерфейса
 def start_web_app():
     """Запускает веб-интерфейс на Streamlit"""
+    # Очищаем временные файлы перед запуском
+    clean_temp_directory()
+    
     app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app", "app.py")
     
     if not os.path.exists(app_path):
@@ -233,6 +266,9 @@ def parse_args():
 if __name__ == "__main__":
     # Проверяем структуру проекта
     ensure_project_structure()
+    
+    # Очищаем временные файлы
+    clean_temp_directory()
     
     args = parse_args()
     
