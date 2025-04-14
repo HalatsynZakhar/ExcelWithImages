@@ -11,6 +11,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import openpyxl
 import shutil
 from PIL import Image as PILImage
+import re
 
 # Add parent directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -35,7 +36,7 @@ logger.critical("--- Logger for core.processor initialized ---")
 DEFAULT_CELL_WIDTH_PX = 150 
 DEFAULT_CELL_HEIGHT_PX = 120
 DEFAULT_IMG_QUALITY = 90
-MIN_IMG_QUALITY = 30
+MIN_IMG_QUALITY = 5  # Снижено с 30% до 5% для большего сжатия
 MIN_KB_PER_IMAGE = 10
 MAX_KB_PER_IMAGE = 2048 # 2MB max per image, prevents extreme cases
 SIZE_BUDGET_FACTOR = 0.85 # Use 85% of total size budget for images
@@ -202,7 +203,7 @@ def process_excel_file(
         image_col_letter_excel = image_col_letter
         print(f"[PROCESSOR] Изображения будут вставляться в колонку: '{image_col_letter_excel}'", file=sys.stderr)
     except Exception as e:
-         err_msg = f"Ошибка при подготовке колонки для изображений ('{image_col_name}'): {e}"
+         err_msg = f"Ошибка при подготовке колонки для изображений ('{article_col_name}'): {e}"
          print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
          import traceback
          traceback.print_exc(file=sys.stderr)
@@ -223,67 +224,63 @@ def process_excel_file(
     
     print("[PROCESSOR] --- Начало итерации по строкам DataFrame ---", file=sys.stderr)
     
-    # Обрабатываем все строки, начиная с первой (без игнорирования)
-    for df_index, row_data in df.iterrows():
-        excel_row_index = df_index + 2
-        rows_processed += 1
-        print(f"[PROCESSOR] -- Обработка строки Excel #{excel_row_index} (DataFrame index: {df_index}) --", file=sys.stderr)
+    # Переменная для сохранения найденного качества сжатия первого изображения
+    successful_quality = DEFAULT_IMG_QUALITY
+    # Флаг для определения, было ли обработано первое изображение
+    first_image_processed = False
+    
+    # --- Итерация по строкам ---
+    # Начинаем с 1-й строки (после заголовка), но номер строки будет в формате Excel (от 1)
+    for df_index, row in df.iterrows():
+        excel_row_index = df_index + 1 + 1  # +1 потому что в Excel нумерация с 1, а header_row смещение заголовка
         
-        if rows_processed % 50 == 0 or rows_processed == len(df):
-             print(f"[PROCESSOR] Обработано {rows_processed} из {len(df)} строк ({rows_processed/len(df)*100:.1f}%)", file=sys.stderr)
-
-        article = row_data.get(article_col_name)
-        print(f"[PROCESSOR]   Исходное значение артикула: {repr(article)} (тип: {type(article)})", file=sys.stderr)
-        
-        if pd.isna(article) or not str(article).strip():
-            print("[PROCESSOR]   Пропуск строки: артикул отсутствует или пуст после strip().", file=sys.stderr)
-            continue
-
-        article_str = str(article).strip()
-        print(f"[PROCESSOR]   Артикул для поиска (строка, strip): '{article_str}'", file=sys.stderr)
-
         try:
-            print(f"[PROCESSOR]   Вызов find_images_by_article для '{article_str}' в '{image_folder}'", file=sys.stderr)
-            # Заменяем вызов image_utils на прямой вызов с print внутри
-            # --- Начало кода из find_images_by_article --- 
-            print(f"  [find_images] Поиск для '{article_str}' в '{image_folder}'", file=sys.stderr)
+            # Получаем значение артикула
+            article_str = str(row[article_col_name]) if row[article_col_name] is not None else ""
+            
+            print(f"[PROCESSOR] Обработка строки {excel_row_index}, артикул: '{article_str}'", file=sys.stderr)
+            
+            if pd.isna(row[article_col_name]) or article_str.strip() == "":
+                print(f"[PROCESSOR]   Пустой артикул в строке {excel_row_index}, пропускаем", file=sys.stderr)
+                continue
+            
+            # <<< ПОИСК ИЗОБРАЖЕНИЙ >>>
+            # Вместо вызова find_images_by_article встраиваем его код непосредственно:
+            # --- Начало кода из find_images_by_article ---
             found_image_paths_debug = []
+            print(f"[PROCESSOR]   Нормализация артикула '{article_str}'", file=sys.stderr)
             normalized_article_to_find_debug = image_utils.normalize_article(article_str)
-            print(f"  [find_images] Нормализованный артикул: '{normalized_article_to_find_debug}'", file=sys.stderr)
+            print(f"[PROCESSOR]   Нормализованный артикул: '{normalized_article_to_find_debug}'", file=sys.stderr)
             if os.path.isdir(image_folder) and normalized_article_to_find_debug:
                 try:
                     all_files_in_dir_debug = os.listdir(image_folder)
-                    print(f"  [find_images] Файлы в папке: {all_files_in_dir_debug}", file=sys.stderr)
+                    print(f"[PROCESSOR]   Найдено файлов в папке: {len(all_files_in_dir_debug)}", file=sys.stderr)
                     normalized_name_to_original_path_debug: Dict[str, str] = {}
                     for filename_debug in all_files_in_dir_debug:
                         full_path_debug = os.path.join(image_folder, filename_debug)
                         if os.path.isfile(full_path_debug):
                             file_ext_lower_debug = os.path.splitext(filename_debug)[1].lower()
-                            supported_extensions_debug = ('.jpg', '.jpeg', '.png', '.bmp', '.gif', '.tiff', '.webp')
-                            if file_ext_lower_debug in supported_extensions_debug:
+                            if file_ext_lower_debug in supported_formats:
                                 name_without_ext_debug = os.path.splitext(filename_debug)[0]
                                 normalized_name_debug = image_utils.normalize_article(name_without_ext_debug)
-                                print(f"    [find_images] Файл: '{filename_debug}', Норм: '{normalized_name_debug}'", file=sys.stderr)
                                 if normalized_name_debug:
                                      normalized_name_to_original_path_debug[normalized_name_debug] = full_path_debug
-                    print(f"  [find_images] Нормализованный словарь: {normalized_name_to_original_path_debug}", file=sys.stderr)
                     # Точное совпадение
                     if normalized_article_to_find_debug in normalized_name_to_original_path_debug:
                         exact_match_path_debug = normalized_name_to_original_path_debug[normalized_article_to_find_debug]
-                        print(f"  [find_images] Найдено ТОЧНОЕ совпадение: {exact_match_path_debug}", file=sys.stderr)
+                        print(f"[PROCESSOR]   Найдено ТОЧНОЕ совпадение: {exact_match_path_debug}", file=sys.stderr)
                         if os.access(exact_match_path_debug, os.R_OK):
                             found_image_paths_debug.append(exact_match_path_debug)
                     # Частичное (если точного нет)
                     elif not found_image_paths_debug:
                          for norm_name_debug, original_path_debug in normalized_name_to_original_path_debug.items():
-                            print(f"    [find_images] Проверка частичного: '{normalized_article_to_find_debug}' vs '{norm_name_debug}'", file=sys.stderr)
                             if normalized_article_to_find_debug in norm_name_debug or norm_name_debug in normalized_article_to_find_debug:
-                                print(f"  [find_images] Найдено ЧАСТИЧНОЕ совпадение: {original_path_debug}", file=sys.stderr)
+                                print(f"[PROCESSOR]   Найдено ЧАСТИЧНОЕ совпадение: {original_path_debug}", file=sys.stderr)
                                 if os.access(original_path_debug, os.R_OK):
                                     found_image_paths_debug.append(original_path_debug)
                                     break # Берем первое частичное
                 except Exception as find_e:
-                    print(f"  [find_images] Ошибка поиска: {find_e}", file=sys.stderr)
+                    print(f"[PROCESSOR]   Ошибка поиска: {find_e}", file=sys.stderr)
             # --- Конец кода из find_images_by_article --- 
             image_paths = found_image_paths_debug
             print(f"[PROCESSOR]   Результат поиска изображений: {image_paths}", file=sys.stderr)
@@ -301,13 +298,111 @@ def process_excel_file(
             print(f"[PROCESSOR]   Вызов optimize_image_for_excel для {image_path} с лимитом {target_kb_per_image:.1f} КБ", file=sys.stderr)
             
             try:
-                # <<< Вызываем реальную функцию оптимизации, но логируем результат >>>
-                optimized_buffer = image_utils.optimize_image_for_excel(
-                    image_path, 
-                    max_size_kb=target_kb_per_image,
-                    quality=DEFAULT_IMG_QUALITY,
-                    min_quality=MIN_IMG_QUALITY    
-                )
+                # Для САМОГО ПЕРВОГО изображения во ВСЕМ файле выполняем детальную оптимизацию
+                if not first_image_processed:
+                    # Для первого изображения выполняем полный поиск оптимального качества
+                    print(f"[PROCESSOR]   ПЕРВОЕ ИЗОБРАЖЕНИЕ В ФАЙЛЕ: поиск оптимального качества от {DEFAULT_IMG_QUALITY}% до {MIN_IMG_QUALITY}%", file=sys.stderr)
+                    optimized_buffer = image_utils.optimize_image_for_excel(
+                        image_path, 
+                        target_size_kb=target_kb_per_image,
+                        quality=DEFAULT_IMG_QUALITY,
+                        min_quality=MIN_IMG_QUALITY    
+                    )
+                    # После первого изображения больше не выполняем детальную оптимизацию
+                    first_image_processed = True
+                    
+                    # После успешной оптимизации первого изображения определяем качество,
+                    # которое лучше всего подошло
+                    if optimized_buffer and optimized_buffer.getbuffer().nbytes > 0:
+                        # Мы можем полагаться только на лог-сообщения для определения качества
+                        # Находим в логах последнюю строку с "Итоговое качество сжатия"
+                        try:
+                            # Сначала попытаемся прочитать текущий stderr буфер, если это возможно
+                            quality_found = False
+                            
+                            # Попытка найти в логах
+                            with open("logs/app_latest.log", "r", encoding="utf-8") as log_file:
+                                log_lines = log_file.readlines()
+                                # Ищем два типа строк с информацией о качестве
+                                quality_pattern1 = re.compile(r'\[optimize_excel\] Итоговое качество сжатия: (\d+)%')
+                                quality_pattern2 = re.compile(r'-> Успех! Размер .* c качеством (\d+)')
+                                # Добавляем поиск специального маркера
+                                quality_marker = re.compile(r'\[QUALITY_MARKER\] НАЙДЕНО_КАЧЕСТВО_ДЛЯ_ИЗОБРАЖЕНИЯ: (\d+)')
+                                
+                                # Сначала ищем в последних 100 строках (самая свежая информация)
+                                recent_lines = log_lines[-100:] if len(log_lines) > 100 else log_lines
+                                
+                                for line in reversed(recent_lines):
+                                    # Приоритетно ищем специальный маркер
+                                    match = quality_marker.search(line)
+                                    if match:
+                                        found_quality = int(match.group(1))
+                                        successful_quality = found_quality
+                                        print(f"[PROCESSOR]   НАЙДЕН СПЕЦИАЛЬНЫЙ МАРКЕР КАЧЕСТВА: {successful_quality}%", file=sys.stderr)
+                                        quality_found = True
+                                        break
+                                        
+                                    match = quality_pattern1.search(line)
+                                    if match:
+                                        found_quality = int(match.group(1))
+                                        successful_quality = found_quality
+                                        print(f"[PROCESSOR]   Определено оптимальное качество из последних логов (pattern 1): {successful_quality}%", file=sys.stderr)
+                                        quality_found = True
+                                        break
+                                        
+                                    match = quality_pattern2.search(line)
+                                    if match:
+                                        found_quality = int(match.group(1))
+                                        successful_quality = found_quality
+                                        print(f"[PROCESSOR]   Определено оптимальное качество из последних логов (pattern 2): {successful_quality}%", file=sys.stderr)
+                                        quality_found = True
+                                        break
+                                
+                                # Если не нашли в последних строках, ищем во всем файле
+                                if not quality_found:
+                                    print(f"[PROCESSOR]   Качество не найдено в последних строках логов, ищем во всем файле...", file=sys.stderr)
+                                    for line in reversed(log_lines):
+                                        match = quality_pattern1.search(line)
+                                        if match:
+                                            found_quality = int(match.group(1))
+                                            successful_quality = found_quality
+                                            print(f"[PROCESSOR]   Определено оптимальное качество из всех логов: {successful_quality}%", file=sys.stderr)
+                                            quality_found = True
+                                            break
+                                
+                                # Если все еще не нашли, попробуем прочитать из временного файла
+                                if not quality_found:
+                                    try:
+                                        temp_quality_file = os.path.join(tempfile.gettempdir(), "last_image_quality.txt")
+                                        if os.path.exists(temp_quality_file):
+                                            with open(temp_quality_file, "r") as qf:
+                                                file_quality = int(qf.read().strip())
+                                                successful_quality = file_quality
+                                                print(f"[PROCESSOR]   Определено качество из временного файла: {successful_quality}%", file=sys.stderr)
+                                                quality_found = True
+                                    except Exception as file_err:
+                                        print(f"[PROCESSOR]   Ошибка чтения временного файла с качеством: {file_err}", file=sys.stderr)
+                                
+                                # Если все еще не нашли, используем мин. значение
+                                if not quality_found:
+                                    successful_quality = MIN_IMG_QUALITY  # Прямое использование мин. качества
+                                    print(f"[PROCESSOR]   Качество не найдено в логах. Используем минимальное значение: {successful_quality}%", file=sys.stderr)
+                        except Exception as log_e:
+                            print(f"[PROCESSOR WARNING]   Ошибка при чтении лог-файла: {log_e}. Используем минимальное качество.", file=sys.stderr)
+                            successful_quality = MIN_IMG_QUALITY  # Минимальное качество без добавления
+                    
+                    # Сообщаем о выбранном качестве для всех последующих изображений
+                    print(f"[PROCESSOR]   ВАЖНО: Для всех последующих изображений будет использовано качество {successful_quality}%", file=sys.stderr)
+                else:
+                    # Для всех последующих изображений используем найденное качество первого изображения
+                    print(f"[PROCESSOR]   Используем найденное качество {successful_quality}% для изображения {image_path}", file=sys.stderr)
+                    optimized_buffer = image_utils.optimize_image_for_excel(
+                        image_path, 
+                        target_size_kb=target_kb_per_image,
+                        quality=successful_quality,  # Начальное = найденное качество 
+                        min_quality=successful_quality  # Мин. качество = найденное качество (без итераций)
+                    )
+                
                 if optimized_buffer and optimized_buffer.getbuffer().nbytes > 0:
                     buffer_size_kb = optimized_buffer.tell() / 1024
                     print(f"[PROCESSOR]   Оптимизация успешна. Размер буфера: {buffer_size_kb:.1f} КБ", file=sys.stderr)

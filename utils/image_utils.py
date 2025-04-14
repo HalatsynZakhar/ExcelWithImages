@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Any, Union, Set
 import sys
+import tempfile
 
 from PIL import Image as PILImage
 
@@ -115,22 +116,26 @@ def find_image_by_article(article: Any, images_folder: str,
         logger.error(f"Ошибка при поиске изображения по артикулу '{article}': {e}")
         return None
 
-def optimize_image(image_path: str, max_size_kb: int = 20000, 
-                  quality_step: int = 5, min_quality: int = 30, 
-                  target_width: int = 500, target_height: int = 500) -> io.BytesIO:
+def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Optional[int] = None,
+                target_height: Optional[int] = None, quality: int = 85,
+                quality_step: int = 5, min_quality: int = 5,
+                output_path: Optional[str] = None) -> io.BytesIO:
     """
-    Оптимизирует изображение для вставки в Excel
+    Оптимизирует изображение, снижая его качество и/или размер,
+    чтобы уместить в заданный лимит размера файла.
     
     Args:
-        image_path (str): Путь к изображению
-        max_size_kb (int): Максимальный размер файла в КБ (по умолчанию 20000 - 20MB)
-        quality_step (int): Шаг снижения качества JPEG
-        min_quality (int): Минимальное допустимое качество
-        target_width (int): Целевая ширина
-        target_height (int): Целевая высота
+        image_path (str): Путь к исходному изображению
+        max_size_kb (int): Максимальный размер файла в килобайтах
+        target_width (Optional[int]): Целевая ширина изображения
+        target_height (Optional[int]): Целевая высота изображения
+        quality (int): Начальное качество JPEG (от 1 до 100)
+        quality_step (int): Шаг снижения качества при каждой итерации
+        min_quality (int): Минимальное допустимое качество JPEG (снижено до 5%)
+        output_path (Optional[str]): Путь для сохранения оптимизированного изображения
         
     Returns:
-        io.BytesIO: Буфер с оптимизированным изображением
+        io.BytesIO: Объект BytesIO с оптимизированным изображением
     """
     try:
         if not os.path.exists(image_path):
@@ -299,15 +304,26 @@ def optimize_image(image_path: str, max_size_kb: int = 20000,
         logger.error(f"Ошибка при оптимизации изображения {image_path}: {e}")
         raise
 
-def optimize_image_for_excel(image_path: str, max_size_kb: int = 100, 
-                          quality: int = 90, min_quality: int = 30) -> io.BytesIO:
+def optimize_image_for_excel(image_path: str, target_size_kb: int = 100, 
+                          quality: int = 90, min_quality: int = 5,
+                          output_folder: Optional[str] = None) -> Union[io.BytesIO, Tuple[io.BytesIO, int]]:
     """
     Оптимизирует изображение до заданного размера в КБ для вставки в Excel.
     Сначала пробует снижать качество JPEG, если не удается - возвращает лучший результат.
+    
+    Args:
+        image_path (str): Путь к изображению
+        target_size_kb (int): Целевой размер файла в КБ (по умолчанию 100 КБ)
+        quality (int): Начальное качество JPEG (1-100)
+        min_quality (int): Минимально допустимое качество JPEG (снижено до 5% для максимального сжатия)
+        output_folder (Optional[str]): Папка для сохранения промежуточных результатов (если требуется)
+        
+    Returns:
+        io.BytesIO: Буфер с оптимизированным изображением
     """
     # <<< Используем print в stderr вместо logger >>>
     print(f"  [optimize_excel] Оптимизация изображения: {image_path}", file=sys.stderr)
-    print(f"  [optimize_excel] Цель: < {max_size_kb} КБ, Качество: {quality}-{min_quality}", file=sys.stderr)
+    print(f"  [optimize_excel] Цель: < {target_size_kb} КБ, Качество: {quality}-{min_quality}", file=sys.stderr)
 
     if not os.path.isfile(image_path):
         print(f"  [optimize_excel ERROR] Файл не найден: {image_path}", file=sys.stderr)
@@ -328,6 +344,7 @@ def optimize_image_for_excel(image_path: str, max_size_kb: int = 100,
         result_buffer = io.BytesIO()
         current_quality = quality
         best_buffer = None
+        best_quality = quality  # Запоминаем лучшее качество
         best_size_kb = float('inf')
         found_within_limit = False
 
@@ -350,10 +367,11 @@ def optimize_image_for_excel(image_path: str, max_size_kb: int = 100,
                     current_buffer_value = result_buffer.getvalue()
                     best_buffer = io.BytesIO(current_buffer_value)
                     best_size_kb = file_size_kb
+                    best_quality = current_quality  # Запоминаем качество
                     print(f"      -> Новый лучший результат сохранен (качество {current_quality}, размер {best_size_kb:.1f} КБ)", file=sys.stderr)
                 
-                if file_size_kb <= max_size_kb:
-                    print(f"      -> Успех! Размер ({file_size_kb:.1f} КБ) <= лимита ({max_size_kb} КБ)", file=sys.stderr)
+                if file_size_kb <= target_size_kb:
+                    print(f"      -> Успех! Размер ({file_size_kb:.1f} КБ) <= лимита ({target_size_kb} КБ)", file=sys.stderr)
                     found_within_limit = True
                     break
                          
@@ -366,7 +384,18 @@ def optimize_image_for_excel(image_path: str, max_size_kb: int = 100,
         # --- Возвращаем результат --- 
         if best_buffer is not None:
              final_size_kb = best_buffer.tell() / 1024
-             print(f"  [optimize_excel] Оптимизация завершена. Итоговый размер: {final_size_kb:.1f} КБ (лучший был {best_size_kb:.1f} КБ). В лимит ({max_size_kb} КБ) уложились: {found_within_limit}", file=sys.stderr)
+             print(f"  [optimize_excel] Оптимизация завершена. Итоговый размер: {final_size_kb:.1f} КБ (лучший был {best_size_kb:.1f} КБ). В лимит ({target_size_kb} КБ) уложились: {found_within_limit}", file=sys.stderr)
+             print(f"  [optimize_excel] Итоговое качество сжатия: {best_quality}%", file=sys.stderr)
+             # Добавляем специальный маркер для легкого поиска
+             print(f"  [QUALITY_MARKER] НАЙДЕНО_КАЧЕСТВО_ДЛЯ_ИЗОБРАЖЕНИЯ: {best_quality}", file=sys.stderr)
+             
+             # Записываем качество во временный файл для гарантии
+             try:
+                 with open(os.path.join(tempfile.gettempdir(), "last_image_quality.txt"), "w") as quality_file:
+                     quality_file.write(str(best_quality))
+             except Exception as qf_e:
+                 print(f"  [optimize_excel] Ошибка записи качества во временный файл: {qf_e}", file=sys.stderr)
+             
              best_buffer.seek(0)
              return best_buffer
         else:

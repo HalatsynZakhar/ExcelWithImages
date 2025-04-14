@@ -65,10 +65,11 @@ class ConfigManager:
             "image_settings": {
                 "max_size_kb": 100,     # Максимальный размер изображения в КБ
                 "quality": 90,          # Начальное качество JPEG
-                "min_quality": 30,      # Минимальное качество JPEG
+                "min_quality": 5,       # Минимальное качество JPEG (снижено для большего сжатия)
                 "target_width": 300,    # Целевая ширина изображения
                 "target_height": 300,   # Целевая высота изображения
-                "supported_extensions": [".jpg", ".jpeg", ".png", ".gif", ".bmp"]
+                "supported_extensions": [".jpg", ".jpeg", ".png", ".gif", ".bmp"],
+                "resize_enabled": True
             },
             "ui_settings": {
                 "theme": "light",
