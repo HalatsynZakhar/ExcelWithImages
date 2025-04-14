@@ -311,7 +311,7 @@ def show_settings():
         image_folder = st.text_input(
             "Путь к папке с изображениями",
             value=st.session_state.get('images_folder_path', current_image_folder),
-            help="Укажите путь к папке, где хранятся изображения товаров"
+            help="Укажите полный путь к папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images"
         )
         
         # Если путь изменился, сохраняем его в конфиг и session_state
@@ -323,7 +323,9 @@ def show_settings():
             log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
             
         # Добавляем кнопку сброса пути к значениям по умолчанию
-        if st.button("Сбросить путь к папке изображений"):
+        if st.button("Сбросить путь к папке изображений", 
+                    help="Сбросить путь к папке с изображениями на значение по умолчанию",
+                    type="secondary"):
             downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
             # Сохраняем в session_state для сохранения между перезагрузками
@@ -625,7 +627,7 @@ def file_uploader_section():
         }
         
         /* Увеличиваем высоту кнопок */
-        .stButton > button {
+        .stButton > button:not([kind="secondary"]) {
             height: 80px !important;
             font-size: 20px !important;
             padding: 20px !important;
