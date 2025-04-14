@@ -32,9 +32,8 @@ def normalize_article(article: Any) -> str:
     article_str = str(article)
     
     # Удаляем все нецифровые и небуквенные символы, кроме нижнего подчеркивания и дефиса, затем приводим к нижнему регистру
-    # Затем отдельно удаляем дефисы для сравнения
+    # Сохраняем дефисы в нормализованном артикуле
     normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я_\-]', '', article_str).lower()
-    normalized = normalized.replace('-', '')
     
     return normalized
 
@@ -921,4 +920,4 @@ def find_images_by_article_name(article: Any, images_folder: str,
         logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return [] 
+        return []
