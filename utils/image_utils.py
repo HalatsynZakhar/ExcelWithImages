@@ -31,8 +31,10 @@ def normalize_article(article: Any) -> str:
     # Преобразуем в строку
     article_str = str(article)
     
-    # Удаляем все нецифровые и небуквенные символы, кроме нижнего подчеркивания, приводим к нижнему регистру
-    normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я_]', '', article_str).lower()
+    # Удаляем все нецифровые и небуквенные символы, кроме нижнего подчеркивания и дефиса, затем приводим к нижнему регистру
+    # Затем отдельно удаляем дефисы для сравнения
+    normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я_\-]', '', article_str).lower()
+    normalized = normalized.replace('-', '')
     
     return normalized
 
@@ -330,7 +332,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         raise
 
 def optimize_image_for_excel(image_path: str, target_size_kb: int = 100, 
-                          quality: int = 90, min_quality: int = 5,
+                          quality: int = 90, min_quality: int = 1,
                           output_folder: Optional[str] = None) -> Union[io.BytesIO, Tuple[io.BytesIO, int]]:
     """
     Оптимизирует изображение до заданного размера в КБ для вставки в Excel.
@@ -340,7 +342,7 @@ def optimize_image_for_excel(image_path: str, target_size_kb: int = 100,
         image_path (str): Путь к изображению
         target_size_kb (int): Целевой размер файла в КБ (по умолчанию 100 КБ)
         quality (int): Начальное качество JPEG (1-100)
-        min_quality (int): Минимально допустимое качество JPEG (снижено до 5% для максимального сжатия)
+        min_quality (int): Минимально допустимое качество JPEG (снижено до 1% для максимального сжатия)
         output_folder (Optional[str]): Папка для сохранения промежуточных результатов (если требуется)
         
     Returns:
@@ -404,7 +406,11 @@ def optimize_image_for_excel(image_path: str, target_size_kb: int = 100,
                 print(f"    [optimize_excel ERROR] Ошибка сохранения с качеством {current_quality}: {save_e}", file=sys.stderr)
                 # Пропускаем это качество
 
-            current_quality -= 5
+            # Уменьшаем качество с разным шагом в зависимости от диапазона
+            if current_quality > 5:
+                current_quality -= 5  # Шаг 5% для качества > 5%
+            else:
+                current_quality -= 1  # Шаг 1% для качества <= 5%
 
         # --- Возвращаем результат --- 
         if best_buffer is not None:

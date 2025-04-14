@@ -37,7 +37,7 @@ logger.critical("--- Logger for core.processor initialized ---")
 DEFAULT_CELL_WIDTH_PX = 150 
 DEFAULT_CELL_HEIGHT_PX = 120
 DEFAULT_IMG_QUALITY = 90
-MIN_IMG_QUALITY = 5  # Снижено с 30% до 5% для большего сжатия
+MIN_IMG_QUALITY = 1  # Снижено с 5% до 1% для еще большего сжатия
 MIN_KB_PER_IMAGE = 10
 MAX_KB_PER_IMAGE = 2048 # 2MB max per image, prevents extreme cases
 SIZE_BUDGET_FACTOR = 0.85 # Use 85% of total size budget for images
