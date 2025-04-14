@@ -286,39 +286,8 @@ def add_log_message(message, level="INFO"):
     else:
         log.info(message)
 
-# Функция для обновления кнопок в сайдбаре
-def update_sidebar_buttons():
-    # Кнопка сброса настроек - делаем её красной
-    st.sidebar.markdown("""
-    <style>
-    div[data-testid="stButton"] button[kind="secondary"] {
-        background-color: #FF5555;
-        color: white;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    if st.sidebar.button(
-        'Сбросить настройки', 
-        key='reset_button', 
-        help="Сбрасывает все настройки к значениям по умолчанию",
-        type="secondary"  # Используем secondary для применения стиля
-    ):
-        config_manager.reset_settings()
-        st.session_state['current_settings'] = config_manager.get_config_manager().current_settings
-        
-        # Устанавливаем путь к изображениям
-        downloads_folder = get_downloads_folder()
-        images_path = os.path.join(downloads_folder, "images")
-        config_manager.set_setting("paths.images_folder_path", images_path)
-        st.session_state.images_folder_path = images_path
-        
-        # Устанавливаем стандартные буквы колонок
-        config_manager.set_setting("excel_settings.article_column", "A")
-        config_manager.set_setting("excel_settings.image_column", "B")
-        
-        # Перезагружаем страницу для применения настроек
-        st.session_state['needs_rerun'] = True
+# Функция для обновления кнопок в сайдбаре была удалена
+# и заменена функциональностью в settings_tab
 
 # Функция для отображения настроек
 def show_settings():
@@ -1234,6 +1203,13 @@ def settings_tab():
         current_image_folder = st.session_state.get('images_folder_path', 
                                                   config_manager.get_setting('paths.images_folder_path'))
         
+        # Если путь пустой, устанавливаем путь к папке загрузок по умолчанию
+        if not current_image_folder:
+            current_image_folder = get_downloads_folder()
+            config_manager.set_setting('paths.images_folder_path', current_image_folder)
+            st.session_state.images_folder_path = current_image_folder
+            config_manager.save_settings("Default")
+            
         st.markdown("### Путь к папке с изображениями")
         image_folder = st.text_input(
             "Путь к папке с изображениями",
@@ -1288,12 +1264,12 @@ def settings_tab():
     
     if st.sidebar.button(
         'Сбросить все настройки', 
-        key='reset_button', 
+        key='sidebar_reset_all_button', 
         help="Сбрасывает все настройки к значениям по умолчанию",
         type="secondary"  # Используем secondary для применения стиля
     ):
         config_manager.reset_settings()
-        st.session_state['current_settings'] = config_manager.get_config_manager().current_settings
+        #st.session_state['current_settings'] = config_manager.get_settings().current_settings
         
         # Устанавливаем путь к изображениям
         downloads_folder = get_downloads_folder()
