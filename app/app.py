@@ -311,8 +311,21 @@ def show_settings():
         image_folder = st.text_input(
             "Путь к папке с изображениями",
             value=st.session_state.get('images_folder_path', current_image_folder),
-            help="Укажите полный путь к папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images"
+            help="Укажите полный путь к папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images",
+            key="image_folder_input"
         )
+        
+        # Проверяем, является ли путь сетевым
+        is_network_path = image_folder.startswith('\\\\') or image_folder.startswith('//')
+        if is_network_path:
+            st.warning("⚠️ Путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
+        
+        # Проверяем доступность пути
+        path_exists = os.path.exists(image_folder) if image_folder else False
+        if path_exists:
+            st.success("✅ Путь доступен")
+        else:
+            st.error("❌ Путь недоступен")
         
         # Если путь изменился, сохраняем его в конфиг и session_state
         if image_folder != current_image_folder:
@@ -1261,6 +1274,18 @@ def settings_tab():
             key="sidebar_image_folder_path",
             help="Укажите путь к папке, где хранятся изображения товаров"
         )
+        
+        # Проверяем, является ли путь сетевым
+        is_network_path = image_folder.startswith('\\\\') or image_folder.startswith('//')
+        if is_network_path:
+            st.warning("⚠️ Путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
+        
+        # Проверяем доступность пути
+        path_exists = os.path.exists(image_folder) if image_folder else False
+        if path_exists:
+            st.success("✅ Путь доступен")
+        else:
+            st.error("❌ Путь недоступен")
         
         # Если путь изменился, сохраняем его в конфиг и session_state
         if image_folder != current_image_folder:
