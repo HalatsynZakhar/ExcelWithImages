@@ -1069,102 +1069,86 @@ def process_files():
             add_log_message(f"Колонки: артикулы - {article_col_name}, изображения - {image_col_name}", "INFO") # Log names
             
             # Создаем имя выходного файла
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
+            original_filename = os.path.basename(excel_file_path)
+            name, ext = os.path.splitext(original_filename)
+            output_filename = f"{name}_processed{ext}"
             output_file_path = os.path.join(output_folder, output_filename)
+            
             log.info(f"Выходной файл будет: {output_file_path}")
             add_log_message(f"Подготовка выходного файла: {output_filename}", "INFO")
             
-            # Вставьте ЭТОТ КОД вместо существующего блока try...except,
-            # который содержит вызов process_excel_file,
-            # внутри функции process_files в app.py
-
             try:
-                # Сначала копируем весь оригинальный файл вместо сохранения только выбранного листа
+                # Создаем копию оригинального файла
                 log.info(f"Создание копии оригинального Excel-файла")
-                temp_file_with_full_copy = os.path.join(output_folder, f"temp_full_{timestamp}.xlsx")
-                shutil.copy2(excel_file_path, temp_file_with_full_copy)
-                log.info(f"Создана полная копия исходного файла: {temp_file_with_full_copy}")
-                excel_file_path = temp_file_with_full_copy
-
+                shutil.copy2(excel_file_path, output_file_path)
+                log.info(f"Создана копия исходного файла: {output_file_path}")
+                
                 # <<< ЛОГ ПЕРЕД ВЫЗОВОМ >>>
                 log.info("--- Готовимся к вызову process_excel_file ---")
-                log.info(f"  file_path: {excel_file_path}")
+                log.info(f"  file_path: {output_file_path}")
                 log.info(f"  article_col_name: {article_col_name}")
                 log.info(f"  image_col_name: {image_col_name}")
                 log.info(f"  image_folder: {images_folder}")
                 log.info(f"  output_folder: {output_folder}")
-                log.info(f"  selected_sheet: {selected_sheet}")  # Добавляем выбранный лист в лог
+                log.info(f"  selected_sheet: {selected_sheet}")
                 current_max_mb = config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)
                 log.info(f"  max_total_file_size_mb: {current_max_mb}")
-                add_log_message("Запуск основной обработки файла...", "INFO") # Лог для UI
+                add_log_message("Запуск основной обработки файла...", "INFO")
 
-                # Вызываем функцию обработки, передавая имя листа
+                # Вызываем функцию обработки
                 result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles = process_excel_file(
-                    file_path=excel_file_path,
+                    file_path=output_file_path,
                     article_col_name=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
                     image_col_name=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
                     image_folder=images_folder,
                     output_folder=output_folder,
                     max_total_file_size_mb=current_max_mb,
                     header_row=st.session_state.get('header_row', 0),
-                    sheet_name=selected_sheet  # Добавляем передачу имени листа
+                    sheet_name=selected_sheet
                 )
-
-                # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
-                log.info("--- process_excel_file завершился успешно ---")
-                log.info(f"  result_file_path: {result_file_path}")
-                log.info(f"  images_inserted: {images_inserted}")
-                add_log_message(f"Обработка завершена. Вставлено изображений: {images_inserted}", "SUCCESS") # Лог для UI
-                
-                # Отображаем отчет о ненайденных артикулах и артикулах с несколькими изображениями
-                if not_found_articles:
-                    log.info(f"  Не найдены изображения для {len(not_found_articles)} артикулов")
-                    add_log_message(f"Не найдены изображения для {len(not_found_articles)} артикулов", "WARNING")
-                    # Создаем список для отображения
-                    st.session_state.not_found_articles = not_found_articles
-                
-                if multiple_images_found:
-                    log.info(f"  Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов")
-                    add_log_message(f"Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов", "INFO")
-                    # Сохраняем данные для отображения
-                    st.session_state.multiple_images_found = multiple_images_found
-
-                # Проверяем, что результирующий файл создан
-                if not os.path.exists(result_file_path):
-                    error_msg = "Выходной файл не был создан, хотя ошибок не возникло"
-                    log.error(error_msg)
-                    add_log_message(error_msg, "ERROR")
-                    st.session_state.processing_error = error_msg
-                    return False
-
-                # Сохраняем путь к выходному файлу
-                st.session_state.output_file_path = result_file_path
-
-                # Формируем сообщение об успешной обработке
-                success_msg = f"Обработка успешно завершена. Файл готов к скачиванию."
-                log.info(success_msg)
-                add_log_message(success_msg, "SUCCESS")
-                st.session_state.processing_result = success_msg
-
-                # Отображаем отчет о результатах обработки сразу после успешной обработки
-                # Вызов будет обработан после перезагрузки страницы
-                st.session_state.show_processing_report = True
-                
-                log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
-                return True
-
             except Exception as e:
-                # <<< ЛОГ ПРИ ОШИБКЕ ВЫЗОВА/ВЫПОЛНЕНИЯ >>>
-                error_msg = f"Ошибка при вызове/выполнении process_excel_file: {str(e)}"
-                log.error(error_msg, exc_info=True) # Добавляем traceback в основной лог
-                add_log_message(error_msg, "ERROR") # Сообщение для UI
+                error_msg = f"Ошибка при обработке файла: {str(e)}"
+                log.error(error_msg, exc_info=True)
                 st.session_state.processing_error = error_msg
-                log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА С ОШИБКОЙ =====================")
+                st.session_state.is_processing = False
                 return False
-    finally:
-        # Сбрасываем флаг обработки в любом случае
+            
+            # Сохраняем результат обработки
+            st.session_state.processing_result = result_file_path
+            st.session_state.processing_error = None
+            st.session_state.is_processing = False
+            log.info("===================== ОБРАБОТКА ЗАВЕРШЕНА УСПЕШНО =====================")
+            
+            # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
+            log.info("--- process_excel_file завершился успешно ---")
+            log.info(f"  result_file_path: {result_file_path}")
+            log.info(f"  images_inserted: {images_inserted}")
+            add_log_message(f"Обработка завершена. Вставлено изображений: {images_inserted}", "SUCCESS")
+            
+            # Сохраняем путь к выходному файлу
+            st.session_state.output_file_path = result_file_path
+            
+            # Отображаем отчет о ненайденных артикулах и артикулах с несколькими изображениями
+            if not_found_articles or multiple_images_found:
+                st.warning("Внимание! Некоторые артикулы не найдены или имеют несколько изображений:")
+                if not_found_articles:
+                    st.error(f"Не найдены изображения для {len(not_found_articles)} артикулов:")
+                    for article in not_found_articles:
+                        st.write(article)
+                if multiple_images_found:
+                    st.info(f"Найдено несколько вариантов изображений для {len(multiple_images_found)} артикулов:")
+                    for article, paths in multiple_images_found.items():
+                        st.write(f"Артикул: {article}")
+                        for i, path in enumerate(paths, 1):
+                            st.write(f"  {i}. {path}")
+                        st.write("---")
+            return True
+    except Exception as e:
+        error_msg = f"Ошибка при обработке файла: {str(e)}"
+        log.error(error_msg, exc_info=True)
+        st.session_state.processing_error = error_msg
         st.session_state.is_processing = False
+        return False
 
 # Функция для отображения результатов обработки
 def show_results(stats: Dict[str, Any]):

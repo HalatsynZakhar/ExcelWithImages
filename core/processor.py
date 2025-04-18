@@ -549,7 +549,9 @@ def process_excel_file(
         print(f"[PROCESSOR WARNING] Суммарный размер оптимизированных изображений ({total_processed_image_size_mb:.2f} МБ) превышает расчетный бюджет ({image_size_budget_mb:.2f} МБ).", file=sys.stderr)
 
     # --- Формирование имени выходного файла ---
-    output_file_name = f"processed_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    original_filename = os.path.basename(file_path)
+    name, ext = os.path.splitext(original_filename)
+    output_file_name = f"{name}_processed{ext}"
     
     # Проверяем и создаем выходную папку
     try:
