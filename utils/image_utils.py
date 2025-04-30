@@ -15,12 +15,17 @@ from PIL import Image as PILImage
 
 logger = logging.getLogger(__name__)
 
-def normalize_article(article: Any) -> str:
+def normalize_article(article: Any, for_excel: bool = False) -> str:
     """
-    Нормализует артикул для поиска. Сохраняет дефисы, подчеркивания и точки.
+    Нормализует артикул для поиска.
+    В зависимости от режима нормализует по-разному:
+    
+    - for_excel=True: Входные данные из Excel - заменяет все спецсимволы, кроме пробелов, на дефисы.
+    - for_excel=False: Имена файлов изображений - заменяет все спецсимволы, кроме пробелов и нижнего подчеркивания, на дефисы.
     
     Args:
         article (Any): Артикул в любом формате
+        for_excel (bool): Флаг, указывающий что это данные из Excel (True) или имя файла изображения (False)
         
     Returns:
         str: Нормализованный артикул
@@ -35,12 +40,28 @@ def normalize_article(article: Any) -> str:
     if not article_str:
         return ""
     
-    # Удаляем все пробелы внутри строки - они часто источник проблем при сравнении
-    article_str = article_str.replace(" ", "")
-    
-    # Удаляем все нецифровые и небуквенные символы, КРОМЕ дефисов, нижних подчеркиваний и точек
-    # Сохраняем русские и английские буквы, цифры, дефисы, нижние подчеркивания и точки
-    normalized = re.sub(r'[^a-zA-Z0-9а-яА-Я\-_\.]', '', article_str).lower()
+    if for_excel:
+        # Для данных из Excel: заменяем все спецсимволы (кроме пробелов) на дефисы
+        # Сохраняем буквы, цифры и пробелы, остальное заменяем на дефисы
+        normalized = ''
+        for char in article_str:
+            if char.isalnum() or char == ' ':
+                normalized += char
+            else:
+                normalized += '-'
+        # Приводим к нижнему регистру
+        normalized = normalized.lower()
+    else:
+        # Для имен файлов: заменяем все спецсимволы (кроме пробелов и нижнего подчеркивания) на дефисы
+        # Сохраняем буквы, цифры, пробелы и нижнее подчеркивание
+        normalized = ''
+        for char in article_str:
+            if char.isalnum() or char == ' ' or char == '_':
+                normalized += char
+            else:
+                normalized += '-'
+        # Приводим к нижнему регистру
+        normalized = normalized.lower()
     
     return normalized
 
@@ -950,3 +971,129 @@ def find_images_by_article_name(article: Any, images_folder: str,
         import traceback
         logger.error(traceback.format_exc())
         return []
+
+def find_images_in_multiple_folders(
+    article: Any, 
+    primary_folder: str,
+    secondary_folder: str = None,
+    tertiary_folder: str = None,
+    supported_extensions: Tuple[str, ...] = ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'),
+    search_recursively: bool = True
+) -> Dict[str, Any]:
+    """
+    Находит изображения для артикула, последовательно проверяя несколько папок в порядке приоритета.
+    
+    Args:
+        article (Any): Артикул для поиска
+        primary_folder (str): Основная папка (первый приоритет)
+        secondary_folder (str): Вторая папка (второй приоритет, опционально)
+        tertiary_folder (str): Третья папка (третий приоритет, опционально)
+        supported_extensions (Tuple[str, ...]): Поддерживаемые расширения файлов
+        search_recursively (bool): Искать ли рекурсивно в подпапках
+        
+    Returns:
+        Dict[str, Any]: Словарь с результатами поиска и дополнительной информацией
+            {
+                "found": Boolean - найдено ли изображение,
+                "images": List[str] - список путей к найденным изображениям,
+                "source_folder": int - индекс папки-источника (1, 2, 3),
+                "source_path": str - путь к папке-источнику,
+                "normalized_article": str - нормализованный артикул,
+                "original_article": str - оригинальный артикул,
+                "match_name": str - имя файла, соответствующее артикулу (если найдено)
+            }
+    """
+    # Нормализуем артикул для отображения (не для поиска)
+    normalized_article_display = normalize_article(article, for_excel=True)
+
+    # Проверяем, что артикул не пустой
+    if not article:
+        logger.warning("Пустой артикул")
+        return {
+            "found": False,
+            "images": [],
+            "source_folder": 0,
+            "source_path": "",
+            "normalized_article": normalized_article_display,
+            "original_article": str(article).strip(),
+            "match_name": "",
+            "expected_name": normalized_article_display if normalized_article_display else "Пустой"
+        }
+    
+    # Нормализуем артикул для поиска из Excel
+    normalized_article = normalize_article(article, for_excel=True)
+    
+    # Создаем список папок для поиска (удаляем пустые или несуществующие)
+    folders_to_search = []
+    
+    # Добавляем основную папку
+    if primary_folder and os.path.exists(primary_folder):
+        folders_to_search.append({"path": primary_folder, "priority": 1})
+    
+    # Добавляем вторую папку
+    if secondary_folder and os.path.exists(secondary_folder):
+        folders_to_search.append({"path": secondary_folder, "priority": 2})
+    
+    # Добавляем третью папку
+    if tertiary_folder and os.path.exists(tertiary_folder):
+        folders_to_search.append({"path": tertiary_folder, "priority": 3})
+    
+    # Если нет папок для поиска, возвращаем пустой результат
+    if not folders_to_search:
+        logger.warning(f"Не указаны папки для поиска изображений для артикула: {article}")
+        return {
+            "found": False,
+            "images": [],
+            "source_folder": 0,
+            "source_path": "",
+            "normalized_article": normalized_article_display,
+            "original_article": str(article).strip(),
+            "match_name": "",
+            "expected_name": normalized_article_display
+        }
+    
+    # Последовательно проверяем папки в порядке приоритета
+    for folder_info in folders_to_search:
+        folder_path = folder_info["path"]
+        folder_priority = folder_info["priority"]
+        
+        logger.debug(f"Поиск изображений для артикула '{article}' в папке #{folder_priority}: {folder_path}")
+        
+        # Ищем изображения в текущей папке
+        found_images = find_images_by_article_name(
+            article, 
+            folder_path,
+            supported_extensions,
+            search_recursively
+        )
+        
+        # Если нашли изображения, возвращаем результат
+        if found_images:
+            # Получаем имя файла без пути и расширения
+            match_name = os.path.basename(found_images[0])
+            match_name = os.path.splitext(match_name)[0]
+            
+            logger.info(f"Найдены изображения для артикула '{article}' в папке #{folder_priority}: {folder_path}")
+            return {
+                "found": True,
+                "images": found_images,
+                "source_folder": folder_priority,
+                "source_path": folder_path,
+                "normalized_article": normalized_article_display,
+                "original_article": str(article).strip(),
+                "match_name": match_name,
+                "expected_name": normalized_article_display
+            }
+    
+    # Если не нашли изображения ни в одной папке
+    logger.warning(f"Не найдены изображения для артикула '{article}' ни в одной из указанных папок")
+    return {
+        "found": False,
+        "images": [],
+        "source_folder": 0,
+        "source_path": "",
+        "normalized_article": normalized_article_display,
+        "original_article": str(article).strip(),
+        "match_name": "",
+        "expected_name": normalized_article_display
+    }

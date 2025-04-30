@@ -54,7 +54,9 @@ class ConfigManager:
             "paths": {
                 "input_file_path": "",
                 "output_folder_path": "",
-                "images_folder_path": ""
+                "images_folder_path": "",
+                "secondary_images_folder_path": "",  # Путь к папке с запасными изображениями (второй приоритет)
+                "tertiary_images_folder_path": ""    # Путь к папке с дополнительными запасными изображениями (третий приоритет)
             },
             "excel_settings": {
                 "article_column": "C",  # Столбец с артикулами

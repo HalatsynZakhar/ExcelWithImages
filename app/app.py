@@ -1,3 +1,992 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 import streamlit as st
 import os
 import sys
@@ -15,6 +1004,7 @@ from openpyxl import load_workbook
 from PIL import Image as PILImage
 import json
 import platform
+import plotly.express as px
 
 # Добавляем корневую папку проекта в PYTHONPATH
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -78,7 +1068,7 @@ log = logging.getLogger(__name__)
 # Определяем настройки по умолчанию
 default_settings = {
     "paths": {
-        "images_folder_path": os.path.join(get_downloads_folder(), "images")
+        "images_folder_path": get_downloads_folder()
     },
     "excel_settings": {
         "article_column": "A",
@@ -302,50 +1292,117 @@ def show_settings():
         # Получаем текущие значения из конфига
         config_manager = st.session_state.config_manager
         current_image_folder = config_manager.get_setting('paths.images_folder_path')
+        current_secondary_folder = config_manager.get_setting('paths.secondary_images_folder_path')
+        current_tertiary_folder = config_manager.get_setting('paths.tertiary_images_folder_path')
         
         # Добавляем пояснение
-        st.markdown("### Путь к папке с изображениями")
-        st.markdown("Укажите путь к папке с изображениями, которые нужно вставить в Excel файл.")
+        st.markdown("### Пути к папкам с изображениями")
+        st.markdown("Укажите пути к папкам с изображениями, которые нужно вставить в Excel файл. Поиск будет производиться в порядке приоритета.")
         
-        # Отображаем текстовое поле для пути к папке с изображениями
+        # Отображаем текстовое поле для пути к основной папке с изображениями
+        st.markdown("#### Основная папка с изображениями (приоритет 1)")
         image_folder = st.text_input(
-            "Путь к папке с изображениями",
+            "Путь к основной папке с изображениями",
             value=st.session_state.get('images_folder_path', current_image_folder),
-            help="Укажите полный путь к папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images",
+            help="Укажите полный путь к основной папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images",
             key="image_folder_input"
         )
         
-        # Проверяем, является ли путь сетевым
+        # Создаем переменную для путей по умолчанию
+        downloads_folder = get_downloads_folder()
+        default_secondary_folder = os.path.join(os.path.dirname(downloads_folder), "Excel_reserve_photo")
+
+        # Если вторая папка не указана, устанавливаем ее по умолчанию
+        if not current_secondary_folder:
+            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            current_secondary_folder = default_secondary_folder
+        
+        # Отображаем текстовое поле для пути к второй папке с изображениями
+        st.markdown("#### Запасная папка с изображениями (приоритет 2)")
+        secondary_folder = st.text_input(
+            "Путь к запасной папке с изображениями",
+            value=st.session_state.get('secondary_images_folder_path', current_secondary_folder),
+            help="Укажите полный путь к запасной папке с изображениями. Будет использована, если изображение не найдено в основной папке.",
+            key="secondary_folder_input"
+        )
+        
+        # Отображаем текстовое поле для пути к третьей папке с изображениями
+        st.markdown("#### Дополнительная запасная папка (приоритет 3)")
+        tertiary_folder = st.text_input(
+            "Путь к дополнительной запасной папке",
+            value=st.session_state.get('tertiary_images_folder_path', current_tertiary_folder),
+            help="Укажите полный путь к дополнительной папке с изображениями. Будет использована, если изображение не найдено в основной и запасной папках.",
+            key="tertiary_folder_input"
+        )
+        
+        # Проверяем, является ли основной путь сетевым
         is_network_path = image_folder.startswith('\\\\') or image_folder.startswith('//')
         if is_network_path:
-            st.warning("⚠️ Путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
+            st.warning("⚠️ Основной путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
         
-        # Проверяем доступность пути
+        # Проверяем доступность основного пути
         path_exists = os.path.exists(image_folder) if image_folder else False
         if path_exists:
-            st.success("✅ Путь доступен")
+            st.success("✅ Основной путь доступен")
         else:
-            st.error("❌ Путь недоступен")
+            st.error("❌ Основной путь недоступен")
         
-        # Если путь изменился, сохраняем его в конфиг и session_state
+        # Проверяем доступность второго пути
+        secondary_path_exists = os.path.exists(secondary_folder) if secondary_folder else False
+        if secondary_path_exists:
+            st.success("✅ Запасной путь доступен")
+        else:
+            st.warning("⚠️ Запасной путь недоступен")
+            
+        # Проверяем доступность третьего пути, если он указан
+        if tertiary_folder:
+            tertiary_path_exists = os.path.exists(tertiary_folder)
+            if tertiary_path_exists:
+                st.success("✅ Дополнительный запасной путь доступен")
+            else:
+                st.warning("⚠️ Дополнительный запасной путь недоступен")
+        
+        # Если основной путь изменился, сохраняем его в конфиг и session_state
         if image_folder != current_image_folder:
             config_manager.set_setting('paths.images_folder_path', image_folder)
             config_manager.save_settings("Default")
             # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = image_folder
-            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
+            log.info(f"Сохранен новый путь к основной папке с изображениями: {image_folder}")
             
-        # Добавляем кнопку сброса пути к значениям по умолчанию
-        if st.button("Сбросить путь к папке изображений", 
-                    help="Сбросить путь к папке с изображениями на значение по умолчанию",
+        # Если второй путь изменился, сохраняем его в конфиг и session_state
+        if secondary_folder != current_secondary_folder:
+            config_manager.set_setting('paths.secondary_images_folder_path', secondary_folder)
+            config_manager.save_settings("Default")
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.secondary_images_folder_path = secondary_folder
+            log.info(f"Сохранен новый путь к запасной папке с изображениями: {secondary_folder}")
+            
+        # Если третий путь изменился, сохраняем его в конфиг и session_state
+        if tertiary_folder != current_tertiary_folder:
+            config_manager.set_setting('paths.tertiary_images_folder_path', tertiary_folder)
+            config_manager.save_settings("Default")
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.tertiary_images_folder_path = tertiary_folder
+            log.info(f"Сохранен новый путь к дополнительной запасной папке с изображениями: {tertiary_folder}")
+            
+        # Добавляем кнопку сброса путей к значениям по умолчанию
+        if st.button("Сбросить пути к папкам изображений", 
+                    help="Сбросить пути к папкам с изображениями на значения по умолчанию",
                     type="secondary"):
-            downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
+            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            config_manager.set_setting('paths.tertiary_images_folder_path', "")
+            
             # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = downloads_folder
+            st.session_state.secondary_images_folder_path = default_secondary_folder
+            st.session_state.tertiary_images_folder_path = ""
+            
             config_manager.save_settings("Default")
-            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
-            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            st.success(f"Пути сброшены на значения по умолчанию")
+            log.info(f"Пути сброшены на значения по умолчанию")
+            st.rerun()
     
     # --- Настройки размера файла ---
     with st.sidebar.expander("Размер файла", expanded=True):
@@ -1093,6 +2150,15 @@ def process_files():
                 log.info(f"  article_col_name: {article_col_name}")
                 log.info(f"  image_col_name: {image_col_name}")
                 log.info(f"  image_folder: {images_folder}")
+                
+                # Получаем пути к вторичной и третичной папкам
+                secondary_folder = st.session_state.get('secondary_images_folder_path', 
+                                                 config_manager.get_setting("paths.secondary_images_folder_path", ""))
+                tertiary_folder = st.session_state.get('tertiary_images_folder_path', 
+                                                config_manager.get_setting("paths.tertiary_images_folder_path", ""))
+                
+                log.info(f"  secondary_folder: {secondary_folder}")
+                log.info(f"  tertiary_folder: {tertiary_folder}")
                 log.info(f"  output_folder: {output_folder}")
                 log.info(f"  selected_sheet: {selected_sheet}")  # Добавляем выбранный лист в лог
                 current_max_mb = config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)
@@ -1100,11 +2166,13 @@ def process_files():
                 add_log_message("Запуск основной обработки файла...", "INFO") # Лог для UI
 
                 # Вызываем функцию обработки, передавая имя листа
-                result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles = process_excel_file(
+                result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles, image_search_results = process_excel_file(
                     file_path=excel_file_path,
                     article_col_name=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
                     image_col_name=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
                     image_folder=images_folder,
+                    secondary_image_folder=secondary_folder,  # Передаем путь к вторичной папке
+                    tertiary_image_folder=tertiary_folder,    # Передаем путь к третичной папке
                     output_folder=output_folder,
                     max_total_file_size_mb=current_max_mb,
                     header_row=st.session_state.get('header_row', 0),
@@ -1145,7 +2213,16 @@ def process_files():
                 success_msg = f"Обработка успешно завершена. Файл готов к скачиванию."
                 log.info(success_msg)
                 add_log_message(success_msg, "SUCCESS")
-                st.session_state.processing_result = success_msg
+                
+                # Сохраняем результаты для отображения отчета
+                st.session_state.processing_result = {
+                    'output_path': result_file_path,
+                    'df': result_df,
+                    'images_inserted': images_inserted,
+                    'multiple_images': multiple_images_found,
+                    'not_found': not_found_articles,
+                    'image_search_results': image_search_results
+                }
 
                 # Отображаем отчет о результатах обработки сразу после успешной обработки
                 # Вызов будет обработан после перезагрузки страницы
@@ -1220,32 +2297,24 @@ def initialize_session_state():
         st.session_state.current_settings = config_manager.get_config_manager().current_settings
     if 'selected_sheet' not in st.session_state:
         st.session_state.selected_sheet = None
-    if 'available_sheets' not in st.session_state:
-        st.session_state.available_sheets = []
-    if 'force_rerun' not in st.session_state:
-        st.session_state.force_rerun = False
-    if 'start_processing' not in st.session_state:
-        st.session_state.start_processing = False
-    if 'needs_rerun' not in st.session_state:
-        st.session_state.needs_rerun = False
-    if 'log_messages' not in st.session_state:
-        st.session_state.log_messages = []
-    # Добавляем параметры загрузки Excel
-    if 'skiprows' not in st.session_state:
-        st.session_state.skiprows = 0
+    if 'article_column' not in st.session_state:
+        st.session_state.article_column = config_manager.get_setting('excel_settings.article_column', "A")
+    if 'image_column' not in st.session_state:
+        st.session_state.image_column = config_manager.get_setting('excel_settings.image_column', "B")
+    if 'images_folder_path' not in st.session_state:
+        st.session_state.images_folder_path = config_manager.get_setting('paths.images_folder_path', "")
+    if 'secondary_images_folder_path' not in st.session_state:
+        st.session_state.secondary_images_folder_path = config_manager.get_setting('paths.secondary_images_folder_path', "")
+    if 'tertiary_images_folder_path' not in st.session_state:
+        st.session_state.tertiary_images_folder_path = config_manager.get_setting('paths.tertiary_images_folder_path', "")
     if 'header_row' not in st.session_state:
-        st.session_state.header_row = 0
-    # Добавляем флаг для отображения отчета о результатах обработки
+        st.session_state.header_row = config_manager.get_setting('excel_settings.start_row', 0)
+    if 'sheet_names' not in st.session_state:
+        st.session_state.sheet_names = []
     if 'show_processing_report' not in st.session_state:
         st.session_state.show_processing_report = False
-    # Добавляем контейнеры для данных отчета
-    if 'not_found_articles' not in st.session_state:
-        st.session_state.not_found_articles = None
-    if 'multiple_images_found' not in st.session_state:
-        st.session_state.multiple_images_found = None
-    # Сохраняем путь к папке с изображениями в session_state для сохранения между перезагрузками
-    if 'images_folder_path' not in st.session_state:
-        st.session_state.images_folder_path = config_manager.get_setting("paths.images_folder_path", "")
+    if 'needs_rerun' not in st.session_state:
+        st.session_state.needs_rerun = False
 
 # Функция для отображения вкладки настроек в боковой панели
 def settings_tab():
@@ -1256,52 +2325,120 @@ def settings_tab():
     
     # --- Настройки путей к папкам ---
     with st.sidebar.expander("Настройки путей", expanded=True):
+        # Получаем текущие значения из конфига
         config_manager = st.session_state.config_manager
-        current_image_folder = st.session_state.get('images_folder_path', 
-                                                  config_manager.get_setting('paths.images_folder_path'))
+        current_image_folder = config_manager.get_setting('paths.images_folder_path')
+        current_secondary_folder = config_manager.get_setting('paths.secondary_images_folder_path')
+        current_tertiary_folder = config_manager.get_setting('paths.tertiary_images_folder_path')
         
-        # Если путь пустой, устанавливаем путь к папке загрузок по умолчанию
-        if not current_image_folder:
-            current_image_folder = get_downloads_folder()
-            config_manager.set_setting('paths.images_folder_path', current_image_folder)
-            st.session_state.images_folder_path = current_image_folder
-            config_manager.save_settings("Default")
-            
-        st.markdown("### Путь к папке с изображениями")
+        # Добавляем пояснение
+        st.markdown("### Пути к папкам с изображениями")
+        st.markdown("Укажите пути к папкам с изображениями, которые нужно вставить в Excel файл. Поиск будет производиться в порядке приоритета.")
+        
+        # Отображаем текстовое поле для пути к основной папке с изображениями
+        st.markdown("#### Основная папка с изображениями (приоритет 1)")
         image_folder = st.text_input(
-            "Путь к папке с изображениями",
-            value=current_image_folder,
-            key="sidebar_image_folder_path",
-            help="Укажите путь к папке, где хранятся изображения товаров"
+            "Путь к основной папке с изображениями",
+            value=st.session_state.get('images_folder_path', current_image_folder),
+            help="Укажите полный путь к основной папке, где хранятся изображения товаров. Например: C:/Users/User/Downloads/images",
+            key="image_folder_input"
         )
         
-        # Проверяем, является ли путь сетевым
+        # Создаем переменную для путей по умолчанию
+        downloads_folder = get_downloads_folder()
+        default_secondary_folder = os.path.join(os.path.dirname(downloads_folder), "Excel_reserve_photo")
+
+        # Если вторая папка не указана, устанавливаем ее по умолчанию
+        if not current_secondary_folder:
+            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            current_secondary_folder = default_secondary_folder
+        
+        # Отображаем текстовое поле для пути к второй папке с изображениями
+        st.markdown("#### Запасная папка с изображениями (приоритет 2)")
+        secondary_folder = st.text_input(
+            "Путь к запасной папке с изображениями",
+            value=st.session_state.get('secondary_images_folder_path', current_secondary_folder),
+            help="Укажите полный путь к запасной папке с изображениями. Будет использована, если изображение не найдено в основной папке.",
+            key="secondary_folder_input"
+        )
+        
+        # Отображаем текстовое поле для пути к третьей папке с изображениями
+        st.markdown("#### Дополнительная запасная папка (приоритет 3)")
+        tertiary_folder = st.text_input(
+            "Путь к дополнительной запасной папке",
+            value=st.session_state.get('tertiary_images_folder_path', current_tertiary_folder),
+            help="Укажите полный путь к дополнительной папке с изображениями. Будет использована, если изображение не найдено в основной и запасной папках.",
+            key="tertiary_folder_input"
+        )
+        
+        # Проверяем, является ли основной путь сетевым
         is_network_path = image_folder.startswith('\\\\') or image_folder.startswith('//')
         if is_network_path:
-            st.warning("⚠️ Путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
+            st.warning("⚠️ Основной путь указывает на сетевой диск. Убедитесь, что у вас есть доступ к этой папке через проводник Windows.")
         
-        # Проверяем доступность пути
+        # Проверяем доступность основного пути
         path_exists = os.path.exists(image_folder) if image_folder else False
         if path_exists:
-            st.success("✅ Путь доступен")
+            st.success("✅ Основной путь доступен")
         else:
-            st.error("❌ Путь недоступен")
+            st.error("❌ Основной путь недоступен")
         
-        # Если путь изменился, сохраняем его в конфиг и session_state
+        # Проверяем доступность второго пути
+        secondary_path_exists = os.path.exists(secondary_folder) if secondary_folder else False
+        if secondary_path_exists:
+            st.success("✅ Запасной путь доступен")
+        else:
+            st.warning("⚠️ Запасной путь недоступен")
+            
+        # Проверяем доступность третьего пути, если он указан
+        if tertiary_folder:
+            tertiary_path_exists = os.path.exists(tertiary_folder)
+            if tertiary_path_exists:
+                st.success("✅ Дополнительный запасной путь доступен")
+            else:
+                st.warning("⚠️ Дополнительный запасной путь недоступен")
+        
+        # Если основной путь изменился, сохраняем его в конфиг и session_state
         if image_folder != current_image_folder:
             config_manager.set_setting('paths.images_folder_path', image_folder)
+            config_manager.save_settings("Default")
+            # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = image_folder
+            log.info(f"Сохранен новый путь к основной папке с изображениями: {image_folder}")
+            
+        # Если второй путь изменился, сохраняем его в конфиг и session_state
+        if secondary_folder != current_secondary_folder:
+            config_manager.set_setting('paths.secondary_images_folder_path', secondary_folder)
             config_manager.save_settings("Default")
-            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
-        
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.secondary_images_folder_path = secondary_folder
+            log.info(f"Сохранен новый путь к запасной папке с изображениями: {secondary_folder}")
+            
+        # Если третий путь изменился, сохраняем его в конфиг и session_state
+        if tertiary_folder != current_tertiary_folder:
+            config_manager.set_setting('paths.tertiary_images_folder_path', tertiary_folder)
+            config_manager.save_settings("Default")
+            # Сохраняем в session_state для сохранения между перезагрузками
+            st.session_state.tertiary_images_folder_path = tertiary_folder
+            log.info(f"Сохранен новый путь к дополнительной запасной папке с изображениями: {tertiary_folder}")
+            
         # Добавляем кнопку сброса путей к значениям по умолчанию
-        if st.button("Сбросить путь", key="sidebar_reset_path_button"):
-            downloads_folder = get_downloads_folder()
+        if st.button("Сбросить пути к папкам изображений", 
+                    help="Сбросить пути к папкам с изображениями на значения по умолчанию",
+                    type="secondary"):
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
+            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            config_manager.set_setting('paths.tertiary_images_folder_path', "")
+            
+            # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = downloads_folder
+            st.session_state.secondary_images_folder_path = default_secondary_folder
+            st.session_state.tertiary_images_folder_path = ""
+            
             config_manager.save_settings("Default")
-            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
-            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            st.success(f"Пути сброшены на значения по умолчанию")
+            log.info(f"Пути сброшены на значения по умолчанию")
+            st.rerun()
     
     # --- Настройки размера файла ---
     with st.sidebar.expander("Размер файла", expanded=True):
@@ -1314,12 +2451,12 @@ def settings_tab():
             value=int(config_manager.get_setting('excel_settings.max_total_file_size_mb', 20)), 
             step=1, # Step 1MB
             help="Приблизительный максимальный размер итогового Excel-файла. Изображения будут сжаты для достижения этого лимита.",
-            key="sidebar_max_file_size_mb"
+            key="max_total_file_size_mb_input"
         )
         if max_total_file_size_mb != config_manager.get_setting('excel_settings.max_total_file_size_mb', 20):
             config_manager.set_setting('excel_settings.max_total_file_size_mb', max_total_file_size_mb)
             config_manager.save_settings("Default")
-            log.info(f"Настройка максимального размера файла изменена на: {max_total_file_size_mb} МБ")
+            log.info(f"Настройка max_total_file_size_mb изменена на: {max_total_file_size_mb}")
     
     # Добавляем кнопку для полного сброса настроек
     st.sidebar.markdown("""
@@ -1351,7 +2488,7 @@ def settings_tab():
         config_manager.set_setting("excel_settings.image_column", "B")
         
         # Перезагружаем страницу для применения настроек
-        st.session_state['needs_rerun'] = True
+        st.rerun()
 
 # Функция для проверки новых изображений в папке
 def check_new_images_in_folder():
@@ -1382,17 +2519,38 @@ def show_custom_settings(key_prefix="", use_expanders=True):
         # Получаем текущие значения из конфига
         config_manager = st.session_state.config_manager
         current_image_folder = config_manager.get_setting('paths.images_folder_path')
+        current_secondary_folder = config_manager.get_setting('paths.secondary_images_folder_path', '')
+        current_tertiary_folder = config_manager.get_setting('paths.tertiary_images_folder_path', '')
         
         # Добавляем пояснение
         st.markdown("### Путь к папке с изображениями")
-        st.markdown("Укажите путь к папке с изображениями, которые нужно вставить в Excel файл.")
+        st.markdown("Укажите пути к папкам с изображениями, которые нужно вставить в Excel файл.")
         
-        # Отображаем текстовое поле для пути к папке с изображениями
+        # Основная папка с изображениями
+        st.markdown("#### Основная папка")
         image_folder = st.text_input(
-            "Путь к папке с изображениями",
+            "Путь к основной папке с изображениями",
             value=st.session_state.get('images_folder_path', current_image_folder),
             key=f"{key_prefix}image_folder_path",
-            help="Укажите путь к папке, где хранятся изображения товаров"
+            help="Укажите путь к папке, где хранятся изображения товаров (поиск будет выполнен сначала здесь)"
+        )
+        
+        # Вторичная папка с изображениями
+        st.markdown("#### Вторичная папка (резервная)")
+        secondary_folder = st.text_input(
+            "Путь к вторичной папке с изображениями",
+            value=current_secondary_folder,
+            key=f"{key_prefix}secondary_folder_path",
+            help="Укажите путь к резервной папке с изображениями (поиск будет выполнен здесь, если изображение не найдено в основной папке)"
+        )
+        
+        # Третичная папка с изображениями
+        st.markdown("#### Третичная папка (дополнительная)")
+        tertiary_folder = st.text_input(
+            "Путь к третичной папке с изображениями",
+            value=current_tertiary_folder,
+            key=f"{key_prefix}tertiary_folder_path",
+            help="Укажите путь к дополнительной папке с изображениями (поиск будет выполнен здесь в последнюю очередь)"
         )
         
         # Если путь изменился, сохраняем его в конфиг и session_state
@@ -1400,16 +2558,33 @@ def show_custom_settings(key_prefix="", use_expanders=True):
             config_manager.set_setting('paths.images_folder_path', image_folder)
             st.session_state.images_folder_path = image_folder
             config_manager.save_settings("Default")
-            log.info(f"Сохранен новый путь к папке с изображениями: {image_folder}")
+            log.info(f"Сохранен новый путь к основной папке с изображениями: {image_folder}")
             
+        # Сохраняем пути к вторичной и третичной папкам
+        if secondary_folder != current_secondary_folder:
+            config_manager.set_setting('paths.secondary_images_folder_path', secondary_folder)
+            st.session_state.secondary_images_folder_path = secondary_folder
+            config_manager.save_settings("Default")
+            log.info(f"Сохранен новый путь к вторичной папке с изображениями: {secondary_folder}")
+            
+        if tertiary_folder != current_tertiary_folder:
+            config_manager.set_setting('paths.tertiary_images_folder_path', tertiary_folder)
+            st.session_state.tertiary_images_folder_path = tertiary_folder
+            config_manager.save_settings("Default")
+            log.info(f"Сохранен новый путь к третичной папке с изображениями: {tertiary_folder}")
+        
         # Добавляем кнопку сброса пути к значениям по умолчанию
-        if st.button("Сбросить путь к папке изображений", key=f"{key_prefix}reset_path_button"):
+        if st.button("Сбросить пути к папкам", key=f"{key_prefix}reset_path_button"):
             downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
+            config_manager.set_setting('paths.secondary_images_folder_path', '')
+            config_manager.set_setting('paths.tertiary_images_folder_path', '')
             st.session_state.images_folder_path = downloads_folder
+            st.session_state.secondary_images_folder_path = ''
+            st.session_state.tertiary_images_folder_path = ''
             config_manager.save_settings("Default")
-            st.success(f"Путь сброшен на папку загрузок: {downloads_folder}")
-            log.info(f"Путь сброшен на папку загрузок: {downloads_folder}")
+            st.success(f"Пути сброшены. Основная папка: {downloads_folder}")
+            log.info(f"Пути сброшены. Основная папка: {downloads_folder}")
     
     # Функция для отображения настроек изображений
     def show_image_settings():
@@ -1505,6 +2680,12 @@ def main():
     # Инициализируем session_state
     initialize_session_state()
     
+    # Проверяем, нужно ли отобразить отчет о результатах обработки
+    if st.session_state.get('show_processing_report', False):
+        show_processing_report()
+        # Сбрасываем флаг, чтобы не показывать отчет повторно
+        st.session_state.show_processing_report = False
+    
     # Проверяем, нужен ли перезапуск страницы
     if st.session_state.get('needs_rerun', False):
         st.session_state['needs_rerun'] = False
@@ -1516,6 +2697,7 @@ def main():
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .main .block-container {padding-top: 0.5rem;}
+    .stDataFrame {overflow-x: auto;}
     </style>
     """, unsafe_allow_html=True)
     
@@ -1628,54 +2810,272 @@ def check_required_modules():
     return True
 
 def show_processing_report():
-    """Отображает отчет о результатах обработки файла."""
-    if (st.session_state.get('not_found_articles') is not None or 
-            st.session_state.get('multiple_images_found') is not None):
+    """Отображает отчет о результатах обработки файла"""
+    try:
+        if 'processing_result' not in st.session_state or not st.session_state.processing_result:
+            log.warning("Попытка показать отчет обработки, но результатов обработки нет")
+            return
         
-        st.divider()
-        st.subheader("Отчет о результатах обработки")
+        result = st.session_state.processing_result
         
-        # Отображение информации об артикулах без изображений
-        if st.session_state.not_found_articles:
-            st.warning(f"Не найдены изображения для {len(st.session_state.not_found_articles)} артикулов")
-            with st.expander("Показать список артикулов без изображений"):
-                for article in st.session_state.not_found_articles:
-                    st.write(article)
+        # Распаковываем результат
+        output_path = result.get('output_path', '')
+        df = result.get('df', None)
+        images_inserted = result.get('images_inserted', 0)
+        multiple_images = result.get('multiple_images', {})
+        not_found = result.get('not_found', [])
+        image_search_results = result.get('image_search_results', [])
+        
+        # Создаем вкладки для удобного отображения информации
+        report_tab, details_tab = st.tabs(["Общий отчет", "Подробности"])
+        
+        with report_tab:
+            st.subheader("Отчет об обработке файла")
+            
+            # Информация о загруженном файле и процессе
+            st.markdown("### Информация о процессе")
+            
+            # Проверяем, что temp_file_path существует и является строкой
+            temp_file_path = st.session_state.get('temp_file_path', "Неизвестный файл")
+            file_name = os.path.basename(temp_file_path) if isinstance(temp_file_path, str) else "Неизвестный файл"
+            
+            st.markdown(f"""
+            **Исходный файл:** {file_name}  
+            **Время обработки:** {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}
+            """)
+            
+            # Информация о папках с изображениями
+            with st.expander("Информация о папках с изображениями", expanded=True):
+                # Получаем информацию о папках из первого результата поиска
+                folder_info = {}
+                if image_search_results and len(image_search_results) > 0:
+                    folder_info = image_search_results[0].get("image_folders", {})
                 
-                if len(st.session_state.not_found_articles) > 0:
-                    # Создаем CSV для скачивания
-                    csv_data = "\n".join(st.session_state.not_found_articles)
+                st.markdown("""
+                #### Пути к папкам с изображениями
+                Поиск изображений выполнялся в следующих папках (в порядке приоритета):
+                """)
+                
+                # Основная папка
+                primary_folder = folder_info.get("primary", 
+                                               config_manager.get_setting("paths.images_folder_path", "Не задана"))
+                st.markdown(f"1. **Основная папка:** `{primary_folder}`")
+                
+                # Вторичная папка
+                secondary_folder = folder_info.get("secondary", 
+                                                config_manager.get_setting("paths.secondary_images_folder_path", ""))
+                if secondary_folder:
+                    st.markdown(f"2. **Вторичная папка:** `{secondary_folder}`")
+                else:
+                    st.markdown("2. **Вторичная папка:** Не задана")
+                
+                # Третичная папка
+                tertiary_folder = folder_info.get("tertiary", 
+                                               config_manager.get_setting("paths.tertiary_images_folder_path", ""))
+                if tertiary_folder:
+                    st.markdown(f"3. **Третичная папка:** `{tertiary_folder}`")
+                else:
+                    st.markdown("3. **Третичная папка:** Не задана")
+            
+            # Базовая информация
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Обработано строк", len(df) if df is not None else "N/A")
+                st.metric("Вставлено изображений", images_inserted)
+            with col2:
+                st.metric("Изображения не найдены", len(not_found))
+                st.metric("Найдено несколько вариантов", len(multiple_images))
+            
+            # Информация о выходном файле
+            if output_path and os.path.exists(output_path):
+                file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
+                st.success(f"Результат сохранен в файл: {output_path} (размер: {file_size_mb:.2f} МБ)")
+                # Кнопка для скачивания файла
+                with open(output_path, "rb") as file:
+                    file_name = os.path.basename(output_path)
                     st.download_button(
-                        label="Скачать список артикулов без изображений",
-                        data=csv_data,
-                        file_name="articles_without_images.csv",
-                        mime="text/csv",
+                        label="Скачать обработанный файл",
+                        data=file,
+                        file_name=file_name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
-        
-        # Отображение информации об артикулах с несколькими вариантами изображений
-        if st.session_state.multiple_images_found:
-            st.info(f"Найдено несколько вариантов изображений для {len(st.session_state.multiple_images_found)} артикулов")
-            with st.expander("Показать список артикулов с несколькими вариантами"):
-                for article, paths in st.session_state.multiple_images_found.items():
-                    st.write(f"Артикул: {article}")
-                    for i, path in enumerate(paths, 1):
-                        st.write(f"  {i}. {path}")
-                    st.write("---")
+            else:
+                st.error(f"Выходной файл не найден или не был создан: {output_path}")
+
+            # Сводка по источникам изображений (если есть данные о поиске)
+            if image_search_results:
+                st.subheader("Источники изображений")
                 
-                if len(st.session_state.multiple_images_found) > 0:
-                    # Создаем CSV для скачивания
-                    csv_lines = []
-                    for article, paths in st.session_state.multiple_images_found.items():
-                        paths_str = " | ".join(paths)
-                        csv_lines.append(f"{article},{paths_str}")
+                sources = {"primary": 0, "secondary": 0, "tertiary": 0, "not_found": 0}
+                
+                for result in image_search_results:
+                    if not result.get("found", False):
+                        sources["not_found"] += 1
+                    else:
+                        folder_priority = result.get("source_folder", "primary")
+                        sources[folder_priority] += 1
+                
+                # Отображаем статистику по использованным источникам
+                source_data = {
+                    "Источник": ["Основная папка", "Вторичная папка", "Третичная папка", "Не найдено"],
+                    "Количество": [sources["primary"], sources["secondary"], sources["tertiary"], sources["not_found"]]
+                }
+                
+                source_df = pd.DataFrame(source_data)
+                
+                # Создаем столбчатую диаграмму
+                fig = px.bar(
+                    source_df, 
+                    x='Источник', 
+                    y='Количество',
+                    color='Источник',
+                    color_discrete_sequence=['#4CAF50', '#2196F3', '#FF9800', '#F44336'],
+                    title="Распределение источников изображений"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with details_tab:
+            # Поиск изображений в нескольких папках
+            if image_search_results:
+                st.subheader("Подробности поиска изображений")
+                
+                # Преобразуем результаты поиска в DataFrame для удобного отображения
+                search_details = []
+                for result in image_search_results:
+                    row_index = result.get("row_index", "N/A")
+                    article = result.get("original_article", result.get("article", ""))
+                    found = result.get("found", False)
+                    source = result.get("source_folder", "не найдено") if found else "не найдено"
+                    source_text = {
+                        1: "Основная папка",
+                        2: "Вторичная папка",
+                        3: "Третичная папка",
+                        "не найдено": "Не найдено"
+                    }.get(source, "Неизвестно")
                     
-                    csv_data = "\n".join(csv_lines)
+                    # Получаем информацию о папках поиска
+                    image_folders = result.get("image_folders", {})
+                    primary_folder = image_folders.get("primary", "")
+                    secondary_folder = image_folders.get("secondary", "")
+                    tertiary_folder = image_folders.get("tertiary", "")
+                    
+                    # Все пути поиска на одной строке для компактности
+                    search_paths = []
+                    if primary_folder:
+                        search_paths.append(f"1) {primary_folder}")
+                    if secondary_folder:
+                        search_paths.append(f"2) {secondary_folder}")
+                    if tertiary_folder:
+                        search_paths.append(f"3) {tertiary_folder}")
+                    
+                    search_paths_text = "\n".join(search_paths)
+                    
+                    images_count = len(result.get("images", [])) if found else 0
+                    found_paths = ", ".join(result.get("images", [])[:2])
+                    if images_count > 2:
+                        found_paths += f"... (и еще {images_count-2})"
+                    
+                    search_details.append({
+                        "Строка": row_index + 1,  # +1 для человекочитаемой нумерации
+                        "Артикул": article,
+                        "Статус": "Найдено" if found else "Не найдено",
+                        "Источник": source_text,
+                        "Кол-во найдено": images_count,
+                        "Путь к файлу": found_paths,
+                        "Пути поиска": search_paths_text
+                    })
+                
+                search_df = pd.DataFrame(search_details)
+                # Сортируем по статусу (сначала не найденные), затем по строке
+                search_df = search_df.sort_values(by=["Статус", "Строка"], ascending=[False, True])
+                
+                # Определяем цвета для разных статусов
+                def highlight_status(val):
+                    if val == "Не найдено":
+                        return 'background-color: #FFCDD2'
+                    else:
+                        return ''
+                
+                def highlight_source(val):
+                    if val == "Основная папка":
+                        return 'background-color: #C8E6C9'
+                    elif val == "Вторичная папка":
+                        return 'background-color: #BBDEFB'
+                    elif val == "Третичная папка":
+                        return 'background-color: #FFE0B2'
+                    elif val == "Не найдено":
+                        return 'background-color: #FFCDD2'
+                    else:
+                        return ''
+                
+                # Выводим с подсветкой
+                st.dataframe(
+                    search_df.style
+                    .applymap(highlight_status, subset=["Статус"])
+                    .applymap(highlight_source, subset=["Источник"]),
+                    use_container_width=True,
+                    height=400  # Добавляем фиксированную высоту для лучшей читаемости
+                )
+                
+                # Добавляем кнопку для скачивания отчета в CSV с более заметным оформлением
+                st.markdown("### Скачать полный отчет о поиске изображений")
+                st.write("Вы можете скачать полный отчет о поиске изображений в формате CSV для дальнейшего анализа в Excel или других программах.")
+                
+                csv = search_df.to_csv(index=False).encode('utf-8')
+                col1, col2, col3 = st.columns([1, 2, 1])
+                with col2:
                     st.download_button(
-                        label="Скачать список артикулов с несколькими вариантами",
-                        data=csv_data,
-                        file_name="articles_with_multiple_images.csv",
+                        label="📥 Скачать полный отчет (CSV)",
+                        data=csv,
+                        file_name=f"image_search_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
+                        help="Скачать полный отчет о поиске изображений в CSV формате",
+                        key="download_report_button",
+                        type="primary",  # Делаем кнопку primary для лучшей заметности
                     )
+            
+            # Информация о строках без изображений
+            if not_found:
+                st.subheader("Артикулы без изображений")
+                st.info(f"Для {len(not_found)} артикулов не найдены изображения:")
+                # Выводим список артикулов без найденных изображений
+                st.write(", ".join(not_found) if len(not_found) < 20 else 
+                         f"{', '.join(not_found[:20])}... и еще {len(not_found) - 20}")
+                
+                with st.expander("Показать полный список артикулов без изображений"):
+                    for i, article in enumerate(not_found):
+                        st.write(f"{i+1}. {article}")
+                
+                # Добавляем кнопку для скачивания списка ненайденных артикулов
+                if len(not_found) > 0:
+                    # Подготавливаем данные для скачивания
+                    not_found_txt = "\n".join(not_found)
+                    not_found_bytes = not_found_txt.encode('utf-8')
+                    
+                    st.download_button(
+                        label="📥 Скачать список артикулов без изображений (TXT)",
+                        data=not_found_bytes,
+                        file_name=f"not_found_articles_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                        mime="text/plain",
+                        help="Скачать список артикулов, для которых не были найдены изображения",
+                        key="download_not_found_button"
+                    )
+            
+            # Информация о строках с несколькими вариантами изображений
+            if multiple_images:
+                st.subheader("Артикулы с несколькими вариантами изображений")
+                st.info(f"Для {len(multiple_images)} артикулов найдено несколько вариантов изображений:")
+                
+                for article, paths in multiple_images.items():
+                    with st.expander(f"{article} ({len(paths)} изображений)"):
+                        for i, path in enumerate(paths):
+                            status = "Выбрано" if i == 0 else "Альтернатива"
+                            st.write(f"{status}: {path}")
+    except Exception as e:
+        log.error(f"Ошибка при отображении отчета: {e}")
+        st.error(f"Произошла ошибка при отображении отчета: {e}")
+        import traceback
+        log.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
