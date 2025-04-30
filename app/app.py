@@ -858,13 +858,62 @@ def file_uploader_section():
             st.write(f"**Загружен файл:** {uploaded_file.name}")
             
             current_temp_path = st.session_state.get('temp_file_path', '')
-            if not current_temp_path or os.path.basename(current_temp_path) != uploaded_file.name:
+            current_file_size = uploaded_file.size
+            
+            # Проверка необходимости обновления файла
+            need_update = False
+            
+            # Проверяем, требуется ли обновление файла
+            if not current_temp_path or not os.path.exists(current_temp_path):
+                # Файла еще нет, нужно сохранить
+                need_update = True
+                log.info(f"Файл отсутствует, сохраняем новый: {uploaded_file.name}")
+            elif os.path.basename(current_temp_path) != uploaded_file.name:
+                # Имя файла изменилось, нужно сохранить новый
+                need_update = True
+                log.info(f"Имя файла изменилось: {os.path.basename(current_temp_path)} -> {uploaded_file.name}")
+            else:
+                # Файл с таким же именем уже существует, проверяем размер
+                try:
+                    previous_size = os.path.getsize(current_temp_path)
+                    if previous_size != current_file_size:
+                        # Размер изменился, заменяем файл
+                        need_update = True
+                        log.info(f"Размер файла изменился: {previous_size} -> {current_file_size}")
+                        try:
+                            os.remove(current_temp_path)
+                            log.info(f"Удален предыдущий файл: {current_temp_path}")
+                        except Exception as e:
+                            log.error(f"Ошибка при удалении предыдущего файла: {e}")
+                except Exception as e:
+                    log.error(f"Ошибка при проверке размера файла {current_temp_path}: {e}")
+                    need_update = True
+            
+            # Если требуется обновление, сохраняем файл
+            if need_update:
                 temp_dir = ensure_temp_dir()
+                
+                # Очищаем промежуточные файлы с префиксом temp_full_
+                try:
+                    # Удаляем все временные файлы с префиксом temp_full_
+                    output_folder = os.path.dirname(temp_dir)
+                    for filename in os.listdir(output_folder):
+                        if filename.startswith("temp_full_"):
+                            filepath = os.path.join(output_folder, filename)
+                            try:
+                                if os.path.isfile(filepath):
+                                    os.remove(filepath)
+                                    log.info(f"Удален промежуточный файл: {filepath}")
+                            except Exception as e:
+                                log.error(f"Ошибка при удалении промежуточного файла {filepath}: {e}")
+                except Exception as e:
+                    log.error(f"Ошибка при очистке промежуточных файлов: {e}")
+                    
                 temp_file_path = os.path.join(temp_dir, uploaded_file.name)
                 with open(temp_file_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
                 st.session_state.temp_file_path = temp_file_path
-                add_log_message(f"Файл сохранен: {temp_file_path}", "INFO")
+                add_log_message(f"Файл сохранен: {os.path.basename(temp_file_path)}", "INFO")
                 load_excel_file()
             
             # Удалены настройки пропуска начальных строк и строки с заголовками
