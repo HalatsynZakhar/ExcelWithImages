@@ -73,6 +73,7 @@ def process_excel_file(
     sheet_name: str = None,  # Добавляем параметр для имени листа
     secondary_image_folder: str = None,  # Папка с запасными изображениями (второй приоритет)
     tertiary_image_folder: str = None,   # Папка с дополнительными запасными изображениями (третий приоритет)
+    output_filename: str = None  # Имя выходного файла
 ) -> Tuple[str, Optional[pd.DataFrame], int, Dict[str, List[str]], List[str], List[Dict]]:
     """
     Обрабатывает Excel файл, вставляя изображения на основе номеров артикулов.
@@ -90,6 +91,7 @@ def process_excel_file(
         sheet_name (str, optional): Имя листа Excel для обработки. По умолчанию None (первый лист)
         secondary_image_folder (str, optional): Путь к папке с запасными изображениями. По умолчанию None
         tertiary_image_folder (str, optional): Путь к дополнительной папке с запасными изображениями. По умолчанию None
+        output_filename (str, optional): Имя выходного файла. По умолчанию None
     
     Returns:
         Tuple[str, pd.DataFrame, int, Dict[str, List[str]], List[str], List[Dict]]: 
@@ -634,8 +636,11 @@ def process_excel_file(
             print(f"[PROCESSOR] Создана папка для результатов: {output_folder}", file=sys.stderr)
         
         # Генерируем уникальное имя файла с датой и временем
-        output_filename = f"processed_{os.path.splitext(os.path.basename(file_path))[0]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        result_file_path = os.path.join(output_folder, output_filename)
+        if output_filename:
+            result_file_path = os.path.join(output_folder, output_filename)
+        else:
+            output_filename = f"{os.path.splitext(os.path.basename(file_path))[0]}_with Images_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            result_file_path = os.path.join(output_folder, output_filename)
         
         # Сохраняем Excel-файл
         try:

@@ -1136,23 +1136,26 @@ def process_files():
             add_log_message(f"Обработка файла: {os.path.basename(excel_file_path)}, лист: {selected_sheet}", "INFO")
             add_log_message(f"Колонки: артикулы - {article_col_name}, изображения - {image_col_name}", "INFO") # Log names
             
-            # Создаем имя выходного файла
+            # Создаем timestamp для временных файлов
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_filename = f"processed_{timestamp}_{os.path.basename(excel_file_path)}"
-            output_file_path = os.path.join(output_folder, output_filename)
-            log.info(f"Выходной файл будет: {output_file_path}")
-            add_log_message(f"Подготовка выходного файла: {output_filename}", "INFO")
             
-            # Вставьте ЭТОТ КОД вместо существующего блока try...except,
-            # который содержит вызов process_excel_file,
-            # внутри функции process_files в app.py
-
             try:
                 # Сначала копируем весь оригинальный файл вместо сохранения только выбранного листа
                 log.info(f"Создание копии оригинального Excel-файла")
                 temp_file_with_full_copy = os.path.join(output_folder, f"temp_full_{timestamp}.xlsx")
                 shutil.copy2(excel_file_path, temp_file_with_full_copy)
                 log.info(f"Создана полная копия исходного файла: {temp_file_with_full_copy}")
+                
+                # Сохраняем оригинальное имя файла перед заменой пути
+                original_filename = os.path.basename(excel_file_path)
+                
+                # Создаем имя выходного файла, используя оригинальное имя
+                output_filename = f"{os.path.splitext(original_filename)[0]}_with Images.xlsx"
+                output_file_path = os.path.join(output_folder, output_filename)
+                log.info(f"Выходной файл будет: {output_file_path}")
+                add_log_message(f"Подготовка выходного файла: {output_filename}", "INFO")
+                
+                # Заменяем путь к файлу на временный
                 excel_file_path = temp_file_with_full_copy
 
                 # <<< ЛОГ ПЕРЕД ВЫЗОВОМ >>>
@@ -1187,7 +1190,8 @@ def process_files():
                     output_folder=output_folder,
                     max_total_file_size_mb=current_max_mb,
                     header_row=st.session_state.get('header_row', 0),
-                    sheet_name=selected_sheet  # Добавляем передачу имени листа
+                    sheet_name=selected_sheet,  # Добавляем передачу имени листа
+                    output_filename=output_filename  # Передаем готовое имя выходного файла
                 )
 
                 # <<< ЛОГ ПОСЛЕ УСПЕШНОГО ВЫЗОВА >>>
