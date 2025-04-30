@@ -321,7 +321,7 @@ def show_settings():
         
         # Создаем переменную для путей по умолчанию
         downloads_folder = get_downloads_folder()
-        default_secondary_folder = os.path.join(os.path.dirname(downloads_folder), "Excel_reserve_photo")
+        default_secondary_folder = r"\\10.10.100.2\Excel_reserve_photo"
 
         # Если вторая папка не указана, устанавливаем ее по умолчанию
         if not current_secondary_folder:
@@ -402,12 +402,12 @@ def show_settings():
                     help="Сбросить пути к папкам с изображениями на значения по умолчанию",
                     type="secondary"):
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
-            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            config_manager.set_setting('paths.secondary_images_folder_path', r"\\10.10.100.2\Excel_reserve_photo")
             config_manager.set_setting('paths.tertiary_images_folder_path', "")
             
             # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = downloads_folder
-            st.session_state.secondary_images_folder_path = default_secondary_folder
+            st.session_state.secondary_images_folder_path = r"\\10.10.100.2\Excel_reserve_photo"
             st.session_state.tertiary_images_folder_path = ""
             
             config_manager.save_settings("Default")
@@ -1361,7 +1361,7 @@ def settings_tab():
         
         # Создаем переменную для путей по умолчанию
         downloads_folder = get_downloads_folder()
-        default_secondary_folder = os.path.join(os.path.dirname(downloads_folder), "Excel_reserve_photo")
+        default_secondary_folder = r"\\10.10.100.2\Excel_reserve_photo"
 
         # Если вторая папка не указана, устанавливаем ее по умолчанию
         if not current_secondary_folder:
@@ -1442,12 +1442,12 @@ def settings_tab():
                     help="Сбросить пути к папкам с изображениями на значения по умолчанию",
                     type="secondary"):
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
-            config_manager.set_setting('paths.secondary_images_folder_path', default_secondary_folder)
+            config_manager.set_setting('paths.secondary_images_folder_path', r"\\10.10.100.2\Excel_reserve_photo")
             config_manager.set_setting('paths.tertiary_images_folder_path', "")
             
             # Сохраняем в session_state для сохранения между перезагрузками
             st.session_state.images_folder_path = downloads_folder
-            st.session_state.secondary_images_folder_path = default_secondary_folder
+            st.session_state.secondary_images_folder_path = r"\\10.10.100.2\Excel_reserve_photo"
             st.session_state.tertiary_images_folder_path = ""
             
             config_manager.save_settings("Default")
@@ -1592,10 +1592,10 @@ def show_custom_settings(key_prefix="", use_expanders=True):
         if st.button("Сбросить пути к папкам", key=f"{key_prefix}reset_path_button"):
             downloads_folder = get_downloads_folder()
             config_manager.set_setting('paths.images_folder_path', downloads_folder)
-            config_manager.set_setting('paths.secondary_images_folder_path', '')
+            config_manager.set_setting('paths.secondary_images_folder_path', r"\\10.10.100.2\Excel_reserve_photo")
             config_manager.set_setting('paths.tertiary_images_folder_path', '')
             st.session_state.images_folder_path = downloads_folder
-            st.session_state.secondary_images_folder_path = ''
+            st.session_state.secondary_images_folder_path = r"\\10.10.100.2\Excel_reserve_photo"
             st.session_state.tertiary_images_folder_path = ''
             config_manager.save_settings("Default")
             st.success(f"Пути сброшены. Основная папка: {downloads_folder}")
