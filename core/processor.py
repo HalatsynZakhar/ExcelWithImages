@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 logger.critical("--- Logger for core.processor initialized ---") 
 
 # <<< Constants for image fitting >>>
-DEFAULT_CELL_WIDTH_PX = 150 
-DEFAULT_CELL_HEIGHT_PX = 120
+DEFAULT_CELL_WIDTH_PX = 300  # Ширина ячейки по умолчанию в пикселях
+DEFAULT_CELL_HEIGHT_PX = 120  # Высота ячейки по умолчанию в пикселях
 DEFAULT_IMG_QUALITY = 90
 MIN_IMG_QUALITY = 1  # Снижено с 5% до 1% для еще большего сжатия
 MIN_KB_PER_IMAGE = 10
@@ -44,7 +44,10 @@ SIZE_BUDGET_FACTOR = 0.85 # Use 85% of total size budget for images
 ROW_HEIGHT_PADDING = 1 # Минимальный отступ для высоты строки
 MIN_ASPECT_RATIO = 0.5 # Минимальное соотношение сторон (высота/ширина)
 MAX_ASPECT_RATIO = 2.0 # Максимальное соотношение сторон (высота/ширина)
-EXCEL_PX_TO_PT_RATIO = 0.75 # Коэффициент преобразования пикселей в пункты Excel
+EXCEL_WIDTH_TO_PIXEL_RATIO = 7.0  # Коэффициент преобразования единиц Excel в пиксели
+EXCEL_PX_TO_PT_RATIO = 0.75  # Коэффициент преобразования пикселей в единицы Excel
+DEFAULT_EXCEL_COLUMN_WIDTH = 40  # Ширина колонки в единицах Excel (примерно 300px)
+MIN_COLUMN_WIDTH_PX = 100  # Минимальная допустимая ширина колонки в пикселях
 
 def ensure_temp_dir(prefix: str = "") -> str:
     """
@@ -265,12 +268,21 @@ def process_excel_file(
          traceback.print_exc(file=sys.stderr)
          raise RuntimeError(err_msg) from e
 
-    # --- Настройка ШИРИНЫ КОЛОНКИ (используем константу) ---
+    # --- Настройка ШИРИНЫ КОЛОНКИ ---
     try:
-        excel_utils.set_column_width(ws, image_col_letter_excel, DEFAULT_CELL_WIDTH_PX / 7) # Approx conversion
-        print(f"[PROCESSOR] Установлена ширина столбца {image_col_letter_excel} на {DEFAULT_CELL_WIDTH_PX} пикс.", file=sys.stderr)
+        # ВАЖНО: НЕ устанавливаем ширину колонки вручную, используем текущую ширину Excel
+        # Проверяем фактическую ширину колонки
+        column_width_excel = ws.column_dimensions[image_col_letter_excel].width
+        
+        # Если ширина колонки не определена, используем стандартную ширину Excel (8.43)
+        if not column_width_excel:
+            column_width_excel = ws.sheet_format.defaultColWidth or 8.43
+        
+        # Переводим в пиксели для информации
+        actual_width_px = int(column_width_excel * EXCEL_WIDTH_TO_PIXEL_RATIO)
+        print(f"[PROCESSOR] Фактическая ширина столбца {image_col_letter_excel}: {column_width_excel:.2f} ед. Excel (≈ {actual_width_px} пикс.)", file=sys.stderr)
     except Exception as e:
-        print(f"[PROCESSOR WARNING] Не удалось установить ширину столбца {image_col_letter_excel}: {e}", file=sys.stderr)
+        print(f"[PROCESSOR WARNING] Не удалось определить ширину столбца {image_col_letter_excel}: {e}", file=sys.stderr)
 
 
     # --- Обработка строк и вставка изображений ---
@@ -563,63 +575,75 @@ def process_excel_file(
             
             # Вставляем изображение в Excel
             try:
-                # Пробуем вставить изображение в ячейку
-                anchor_cell = f"{image_col_letter_excel}{excel_row_index + 1 + header_row}"
-                current_optimization_quality = 100
+                # Проверяем, что буфер изображения не пустой
+                if not optimized_buffer or optimized_buffer.getbuffer().nbytes == 0:
+                    print(f"[PROCESSOR WARNING] Пустой буфер изображения для артикула '{article_str}' (строка {excel_row_index})", file=sys.stderr)
+                    continue
                 
-                # Вставляем оптимизированное изображение в ячейку
+                # 1. Определяем фактическую ширину колонки Excel
+                column_width_excel = None
                 try:
-                    # Дополнительная проверка буфера перед вставкой
-                    if optimized_buffer and optimized_buffer.getbuffer().nbytes > 0:
-                        # Получаем размеры изображения
-                        optimized_buffer.seek(0)
-                        pil_image = PILImage.open(optimized_buffer)
-                        img_width, img_height = pil_image.size
-                        aspect_ratio = img_height / img_width if img_width > 0 else 1.0
-                        optimized_buffer.seek(0)
-                        
-                        # Рассчитываем ширину колонки и высоту строки на основе изображения
-                        # Используем целевую ширину, соответствующую ширине колонки в Excel
-                        target_width = int(get_column_width_pixels(ws, image_col_letter_excel))
-                        if target_width <= 0:
-                            target_width = 300  # Значение по умолчанию, если не удалось получить ширину колонки
-                        
-                        # Рассчитываем высоту на основе пропорций изображения
-                        target_height = int(target_width * aspect_ratio)
-                        
-                        # Вставляем изображение с указанной шириной и высотой
-                        excel_utils.insert_image_from_buffer(
-                            ws, 
-                            optimized_buffer,
-                            anchor_cell,
-                            width=target_width,
-                            height=target_height,
-                            preserve_aspect_ratio=True
-                        )
-                        
-                        # Устанавливаем высоту строки в соответствии с высотой изображения
-                        row_num = excel_row_index + 1
-                        excel_utils.set_row_height(ws, row_num, target_height * 0.75)  # Коэффициент для перевода пикселей в единицы Excel
-                        
-                        print(f"[PROCESSOR] Вставлено изображение в ячейку {anchor_cell}. Размеры: {target_width}x{target_height}. Соотношение сторон: {aspect_ratio:.2f}", file=sys.stderr)
-                    else:
-                        print(f"[PROCESSOR ERROR] Буфер изображения пуст после оптимизации, вставка не выполнена. Ячейка: {anchor_cell}", file=sys.stderr)
-                        raise ValueError("Пустой буфер изображения")
-                except Exception as e:
-                    print(f"[PROCESSOR ERROR] Ошибка при вставке изображения в ячейку {anchor_cell}: {e}", file=sys.stderr)
-                    traceback.print_exc(file=sys.stderr)
-                    # Если количество вставленных изображений > 0, продолжаем
-                    if images_inserted > 0:
-                        print(f"[PROCESSOR WARNING] Вставка изображения не удалась, но продолжаем обработку. Ошибка: {e}", file=sys.stderr)
-                        continue
-                    else:
-                        # Это первое изображение и мы получили ошибку
-                        print(f"[PROCESSOR ERROR] Критическая ошибка при вставке первого изображения: {e}", file=sys.stderr)
-                        raise
-            except Exception as ins_e:
-                print(f"[PROCESSOR] ОШИБКА ПРИ ВСТАВКЕ: {ins_e}", file=sys.stderr)
-                import traceback
+                    # Получаем прямой доступ к размеру колонки
+                    column_width_excel = ws.column_dimensions[image_col_letter_excel].width
+                except Exception:
+                    pass
+                
+                # Если ширина не определена, используем стандартную ширину листа
+                if not column_width_excel:
+                    column_width_excel = ws.sheet_format.defaultColWidth or 8.43  # Стандартный размер колонки Excel
+                
+                # Переводим в пиксели для расчета размеров изображения
+                target_width_px = int(column_width_excel * EXCEL_WIDTH_TO_PIXEL_RATIO)
+                print(f"[PROCESSOR] Используем фактическую ширину столбца {image_col_letter_excel}: {column_width_excel:.2f} ед. Excel ({target_width_px} пикс.)", file=sys.stderr)
+                
+                # Убираем корректировку - используем точную ширину столбца
+                # 2. Получаем размеры исходного изображения для сохранения пропорций
+                optimized_buffer.seek(0)
+                pil_image = PILImage.open(optimized_buffer)
+                img_width, img_height = pil_image.size
+                aspect_ratio = img_height / img_width if img_width > 0 else 1.0
+                optimized_buffer.seek(0)
+                print(f"[PROCESSOR] Размеры оригинального изображения: {img_width}x{img_height}, соотношение сторон: {aspect_ratio:.2f}", file=sys.stderr)
+                
+                # Рассчитываем высоту изображения с сохранением пропорций
+                target_height_px = int(target_width_px * aspect_ratio)
+                
+                # Формируем адрес ячейки для вставки
+                anchor_cell = f"{image_col_letter_excel}{excel_row_index + 1 + header_row}"
+                
+                # Вставляем изображение с рассчитанными размерами
+                print(f"[PROCESSOR] Вставляем изображение с размерами: {target_width_px}x{target_height_px} пикс.", file=sys.stderr)
+                excel_utils.insert_image_from_buffer(
+                    ws, 
+                    optimized_buffer,
+                    anchor_cell,
+                    width=target_width_px,
+                    height=target_height_px,
+                    preserve_aspect_ratio=True
+                )
+                
+                # 3. Устанавливаем высоту строки, чтобы изображение точно вписалось
+                row_num = excel_row_index + 1 + header_row
+                # Преобразуем пиксели в единицы Excel
+                row_height_excel = target_height_px * EXCEL_PX_TO_PT_RATIO
+                excel_utils.set_row_height(ws, row_num, row_height_excel)
+                print(f"[PROCESSOR] Установлена высота строки {row_num}: {row_height_excel:.2f} ед. Excel для вмещения изображения", file=sys.stderr)
+                
+                # Увеличиваем счетчик успешно вставленных изображений
+                images_inserted += 1
+                print(f"[PROCESSOR] Изображение успешно вставлено в ячейку {anchor_cell}", file=sys.stderr)
+                
+            except Exception as e:
+                print(f"[PROCESSOR ERROR] Ошибка при вставке изображения: {e}", file=sys.stderr)
                 traceback.print_exc(file=sys.stderr)
+                # Если количество вставленных изображений > 0, продолжаем
+                if images_inserted > 0:
+                    print(f"[PROCESSOR WARNING] Вставка изображения не удалась, но продолжаем обработку других строк", file=sys.stderr)
+                    continue
+                else:
+                    # Это первое изображение и мы получили ошибку
+                    print(f"[PROCESSOR ERROR] Критическая ошибка при вставке первого изображения: {e}", file=sys.stderr)
+                    raise
         else:
             print(f"[PROCESSOR WARNING] Пустой буфер изображения для артикула '{article_str}' (строка {excel_row_index})", file=sys.stderr)
     
@@ -671,7 +695,8 @@ def process_excel_file(
 
 def get_column_width_pixels(ws, column_letter):
     """
-    Получает ширину колонки в пикселях на основе настроек Excel.
+    Получает фактическую ширину колонки в пикселях на основе настроек Excel.
+    Не использует значений по умолчанию, берет только реальные данные из Excel.
     
     Args:
         ws: Рабочий лист Excel
@@ -682,15 +707,23 @@ def get_column_width_pixels(ws, column_letter):
     """
     try:
         # Получаем размер колонки из объекта column_dimensions
-        width_in_excel_units = ws.column_dimensions[column_letter].width
+        column_dimensions = ws.column_dimensions.get(column_letter)
         
-        # Если width не установлен, используем значение по умолчанию
-        if width_in_excel_units is None:
-            width_in_excel_units = 8.43  # Стандартная ширина колонки в Excel
-            
-        # Преобразуем единицы Excel в пиксели (приблизительно)
-        pixels = int(width_in_excel_units * 7)  # Примерный коэффициент преобразования
+        # Проверяем, существует ли размер для данной колонки
+        if column_dimensions and hasattr(column_dimensions, 'width') and column_dimensions.width is not None:
+            width_in_excel_units = column_dimensions.width
+            print(f"[PROCESSOR DEBUG] Получена ширина колонки {column_letter}: {width_in_excel_units} ед. Excel", file=sys.stderr)
+        else:
+            # Используем стандартную ширину из настроек листа
+            width_in_excel_units = ws.sheet_format.defaultColWidth or 8.43  # Стандартный размер колонки Excel
+            print(f"[PROCESSOR DEBUG] Используется стандартная ширина листа для колонки {column_letter}: {width_in_excel_units} ед. Excel", file=sys.stderr)
+        
+        # Преобразуем единицы Excel в пиксели
+        pixels = int(width_in_excel_units * EXCEL_WIDTH_TO_PIXEL_RATIO)
+        print(f"[PROCESSOR DEBUG] Ширина колонки {column_letter} в пикселях: {pixels} px", file=sys.stderr)
         return pixels
     except Exception as e:
-        print(f"[PROCESSOR WARNING] Не удалось получить ширину колонки {column_letter}: {e}", file=sys.stderr)
-        return 300  # Значение по умолчанию в пикселях
+        print(f"[PROCESSOR WARNING] Ошибка при получении ширины колонки {column_letter}: {e}", file=sys.stderr)
+        # Используем стандартную ширину Excel в крайнем случае
+        standard_width = 8.43  # Стандартная ширина колонки Excel
+        return int(standard_width * EXCEL_WIDTH_TO_PIXEL_RATIO)

@@ -1311,3 +1311,34 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
     except Exception as e:
         logger.exception(f"Ошибка при обработке Excel файла: {e}")
         raise
+
+def get_column_width_pixels(worksheet: Worksheet, column_letter: str) -> int:
+    """
+    Получает ширину колонки в пикселях на основе настроек Excel.
+    
+    Args:
+        worksheet (Worksheet): Рабочий лист
+        column_letter (str): Буква колонки (например, 'A', 'B', etc.)
+        
+    Returns:
+        int: Ширина колонки в пикселях
+    """
+    try:
+        # Получаем размер колонки из объекта column_dimensions
+        width_in_excel_units = worksheet.column_dimensions[column_letter].width
+        
+        # Если width не установлен, используем значение по умолчанию
+        if width_in_excel_units is None:
+            width_in_excel_units = 8.43  # Стандартная ширина колонки в Excel
+            
+        # Более точный коэффициент преобразования единиц Excel в пиксели (около 7 пикселей на единицу)
+        pixels = int(width_in_excel_units * 7.0)
+        
+        # Применяем небольшую корректировку для более точного соответствия
+        pixels = int(pixels * 0.95)  # Уменьшаем на 5% для более точного соответствия
+        
+        logger.debug(f"Ширина колонки {column_letter}: {width_in_excel_units} ед. Excel ≈ {pixels} пикселей")
+        return pixels
+    except Exception as e:
+        logger.error(f"Ошибка при получении ширины колонки {column_letter}: {e}")
+        return 300  # Значение по умолчанию в пикселях
