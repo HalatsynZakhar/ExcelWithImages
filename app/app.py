@@ -1410,7 +1410,7 @@ def settings_tab():
         
         # Создаем переменную для путей по умолчанию
         downloads_folder = get_downloads_folder()
-        default_secondary_folder = r"\\10.10.100.2\Excel_reserve_photo"
+        default_secondary_folder = r"\\10.10.100.2\pictures"
 
         # Если вторая папка не указана, устанавливаем ее по умолчанию
         if not current_secondary_folder:
