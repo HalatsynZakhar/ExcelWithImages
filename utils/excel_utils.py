@@ -541,7 +541,7 @@ def copy_worksheet(source_workbook: Workbook, source_worksheet_name: str,
 
 def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str, 
                 width: Optional[int] = None, height: Optional[int] = None, 
-                preserve_aspect_ratio: bool = True) -> bool:
+                preserve_aspect_ratio: bool = True, background_color: Optional[str] = None) -> bool:
     """
     Вставляет изображение в рабочий лист.
     
@@ -552,6 +552,7 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         width (Optional[int], optional): Ширина изображения в пикселях
         height (Optional[int], optional): Высота изображения в пикселях
         preserve_aspect_ratio (bool, optional): Сохранять пропорции изображения. По умолчанию True.
+        background_color (Optional[str], optional): Цвет фона ячейки в формате RRGGBB. По умолчанию None.
     
     Returns:
         bool: True, если успешно
@@ -560,6 +561,11 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         if not os.path.exists(image_path):
             logger.error(f"Изображение не найдено: {image_path}")
             return False
+        
+        # Устанавливаем цвет фона ячейки, если указан
+        if background_color:
+            set_cell_background(worksheet, anchor_cell, background_color)
+            logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
             
         # Создаем объект изображения
         img = XLImage(image_path)
@@ -595,7 +601,8 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
 def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: str,
                            width: Optional[int] = None, height: Optional[int] = None,
                            preserve_aspect_ratio: bool = True, 
-                           anchor_type: str = "oneCellAnchor") -> bool:
+                           anchor_type: str = "oneCellAnchor",
+                           background_color: Optional[str] = None) -> bool:
     """
     Вставляет изображение из буфера в рабочий лист.
     
@@ -608,6 +615,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
         preserve_aspect_ratio (bool, optional): Сохранять пропорции изображения. По умолчанию True.
         anchor_type (str, optional): Тип привязки изображения ('oneCellAnchor', 'absoluteAnchor', 'twoCellAnchor').
                                     По умолчанию 'oneCellAnchor'.
+        background_color (Optional[str], optional): Цвет фона ячейки в формате RRGGBB. По умолчанию None.
     
     Returns:
         bool: True, если успешно
@@ -620,6 +628,11 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             return False
             
         logger.debug(f"Вставка изображения из буфера в ячейку {anchor_cell}. Размер буфера: {buffer_size/1024:.2f} КБ")
+        
+        # Устанавливаем цвет фона ячейки, если указан
+        if background_color:
+            set_cell_background(worksheet, anchor_cell, background_color)
+            logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
         
         # Сбрасываем указатель буфера в начало
         image_buffer.seek(0)
@@ -1023,7 +1036,8 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                             anchor_cell=cell_address,
                             width=width_px,
                             height=height_px,
-                            preserve_aspect_ratio=True
+                            preserve_aspect_ratio=True,
+                            background_color="000000"  # Добавляем черный фон
                         )
                         
                         stats["images_inserted"] += 1
@@ -1124,8 +1138,8 @@ def insert_images_to_excel(writer, df, image_column):
                         # Определяем ячейку для вставки
                         anchor_cell = f"{col_letter}{idx + row_offset + 1}"
                         
-                        # Вставляем изображение
-                        insert_image(worksheet, img_path.strip(), anchor_cell)
+                        # Вставляем изображение с черным фоном
+                        insert_image(worksheet, img_path.strip(), anchor_cell, background_color="000000")
                         
         logger.info(f"Изображения успешно вставлены в Excel файл")
         return True
@@ -1268,7 +1282,8 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
                                 anchor_cell=cell_address,
                                 width=width_px,
                                 height=height_px,
-                                preserve_aspect_ratio=True
+                                preserve_aspect_ratio=True,
+                                background_color="000000"  # Добавляем черный фон
                             )
                             
                             stats["images_inserted"] += 1
@@ -1342,3 +1357,32 @@ def get_column_width_pixels(worksheet: Worksheet, column_letter: str) -> int:
     except Exception as e:
         logger.error(f"Ошибка при получении ширины колонки {column_letter}: {e}")
         return 300  # Значение по умолчанию в пикселях
+
+def set_cell_background(worksheet: Worksheet, cell_reference: str, color: str = "000000") -> bool:
+    """
+    Устанавливает цвет заливки ячейки.
+    
+    Args:
+        worksheet (Worksheet): Рабочий лист
+        cell_reference (str): Ссылка на ячейку (например, 'A1')
+        color (str, optional): Цвет заливки в формате RRGGBB. По умолчанию "000000" (черный).
+    
+    Returns:
+        bool: True, если успешно
+    """
+    try:
+        # Получаем букву столбца и номер строки
+        column_letter = ''.join(filter(str.isalpha, cell_reference))
+        row_num = int(''.join(filter(str.isdigit, cell_reference)))
+        
+        # Получаем объект ячейки
+        cell = worksheet.cell(row=row_num, column=column_index_from_string(column_letter))
+        
+        # Применяем заливку
+        cell.fill = PatternFill(start_color=color, end_color=color, fill_type='solid')
+        
+        logger.debug(f"Установлен цвет заливки ячейки {cell_reference}: {color}")
+        return True
+    except Exception as e:
+        logger.error(f"Ошибка при установке цвета заливки ячейки {cell_reference}: {e}")
+        return False

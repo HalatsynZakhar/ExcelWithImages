@@ -611,15 +611,16 @@ def process_excel_file(
                 # Формируем адрес ячейки для вставки
                 anchor_cell = f"{image_col_letter_excel}{excel_row_index + 1 + header_row}"
                 
-                # Вставляем изображение с рассчитанными размерами
-                print(f"[PROCESSOR] Вставляем изображение с размерами: {target_width_px}x{target_height_px} пикс.", file=sys.stderr)
+                # Вставляем изображение с рассчитанными размерами и черным фоном
+                print(f"[PROCESSOR] Вставляем изображение с размерами: {target_width_px}x{target_height_px} пикс. и черным фоном", file=sys.stderr)
                 excel_utils.insert_image_from_buffer(
                     ws, 
                     optimized_buffer,
                     anchor_cell,
                     width=target_width_px,
                     height=target_height_px,
-                    preserve_aspect_ratio=True
+                    preserve_aspect_ratio=True,
+                    background_color="000000"  # Черный фон
                 )
                 
                 # 3. Устанавливаем высоту строки, чтобы изображение точно вписалось
