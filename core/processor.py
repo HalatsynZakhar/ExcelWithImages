@@ -76,7 +76,8 @@ def process_excel_file(
     sheet_name: str = None,  # Добавляем параметр для имени листа
     secondary_image_folder: str = None,  # Папка с запасными изображениями (второй приоритет)
     tertiary_image_folder: str = None,   # Папка с дополнительными запасными изображениями (третий приоритет)
-    output_filename: str = None  # Имя выходного файла
+    output_filename: str = None,  # Имя выходного файла
+    image_background_color: str = "000000"  # Цвет фона ячейки (по умолчанию черный)
 ) -> Tuple[str, Optional[pd.DataFrame], int, Dict[str, List[str]], List[str], List[Dict]]:
     """
     Обрабатывает Excel файл, вставляя изображения на основе номеров артикулов.
@@ -95,6 +96,7 @@ def process_excel_file(
         secondary_image_folder (str, optional): Путь к папке с запасными изображениями. По умолчанию None
         tertiary_image_folder (str, optional): Путь к дополнительной папке с запасными изображениями. По умолчанию None
         output_filename (str, optional): Имя выходного файла. По умолчанию None
+        image_background_color (str, optional): Цвет фона ячеек с изображениями в формате RRGGBB. По умолчанию "000000" (черный)
     
     Returns:
         Tuple[str, pd.DataFrame, int, Dict[str, List[str]], List[str], List[Dict]]: 
@@ -620,7 +622,7 @@ def process_excel_file(
                     width=target_width_px,
                     height=target_height_px,
                     preserve_aspect_ratio=True,
-                    background_color="000000"  # Черный фон
+                    background_color=image_background_color  # Черный фон
                 )
                 
                 # 3. Устанавливаем высоту строки, чтобы изображение точно вписалось
