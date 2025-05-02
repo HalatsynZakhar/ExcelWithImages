@@ -624,10 +624,10 @@ def process_excel_file(
                 
                 # 3. Устанавливаем высоту строки, чтобы изображение точно вписалось
                 row_num = excel_row_index + 1 + header_row
-                # Преобразуем пиксели в единицы Excel
-                row_height_excel = target_height_px * EXCEL_PX_TO_PT_RATIO
+                # Преобразуем пиксели в единицы Excel и добавляем 1 пиксель к высоте
+                row_height_excel = (target_height_px + 1) * EXCEL_PX_TO_PT_RATIO
                 excel_utils.set_row_height(ws, row_num, row_height_excel)
-                print(f"[PROCESSOR] Установлена высота строки {row_num}: {row_height_excel:.2f} ед. Excel для вмещения изображения", file=sys.stderr)
+                print(f"[PROCESSOR] Установлена высота строки {row_num}: {row_height_excel:.2f} ед. Excel для вмещения изображения (с запасом +1px)", file=sys.stderr)
                 
                 # Увеличиваем счетчик успешно вставленных изображений
                 images_inserted += 1
