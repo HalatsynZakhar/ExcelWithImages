@@ -9,6 +9,7 @@ import json
 import time
 from typing import Dict, List, Any, Optional, Tuple
 import openpyxl
+from openpyxl.utils import get_column_letter
 import shutil
 from PIL import Image as PILImage
 import re
@@ -115,13 +116,23 @@ def process_excel_file(
     print(f"[PROCESSOR] Параметры: article_col={article_col_name}, img_folder={image_folder}, img_col={image_col_name}, max_total_mb={max_total_file_size_mb}, sheet_name={sheet_name}", file=sys.stderr)
 
     # --- Валидация входных данных ---
-    # Проверка валидности обозначений колонок
+    # Проверяем корректность обозначений колонок
+    if not (article_col_name.isdigit() or article_col_name.isalpha()) or not (image_col_name.isdigit() or image_col_name.isalpha()):
+        err_msg = f"Неверное обозначение колонки: '{article_col_name}' или '{image_col_name}'. Используйте буквенные (A, B, C...) или числовые (1, 2, 3...) обозначения"
+        print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
+        raise ValueError(err_msg)
+        
     try:
-        # Принимаем только буквенные обозначения колонок (A, B, C...)
-        if not (article_col_name.isalpha() and image_col_name.isalpha()):
-            err_msg = f"Неверное обозначение колонки: '{article_col_name}' или '{image_col_name}'. Используйте только буквенные обозначения (A, B, C...)"
-            print(f"[PROCESSOR ERROR] {err_msg}", file=sys.stderr)
-            raise ValueError(err_msg)
+        # Преобразуем числовые обозначения в буквенные
+        if article_col_name.isdigit():
+            article_col_idx = int(article_col_name)
+            article_col_name = get_column_letter(article_col_idx)
+            print(f"[PROCESSOR] Преобразовано числовое обозначение {article_col_idx} в букву {article_col_name}", file=sys.stderr)
+            
+        if image_col_name.isdigit():
+            image_col_idx = int(image_col_name)
+            image_col_name = get_column_letter(image_col_idx)
+            print(f"[PROCESSOR] Преобразовано числовое обозначение {image_col_idx} в букву {image_col_name}", file=sys.stderr)
             
         article_col_idx = excel_utils.column_letter_to_index(article_col_name)
         image_col_idx = excel_utils.column_letter_to_index(image_col_name)

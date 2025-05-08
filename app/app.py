@@ -566,19 +566,31 @@ def all_inputs_valid():
     else:
         log_msgs.append(f"Выбран лист: {st.session_state.selected_sheet}")
 
-    # 3. Проверяем, выбрана ли колонка с артикулами (по НАЗВАНИЮ)
+    # 3. Проверяем, выбрана ли колонка с артикулами
     if not st.session_state.get('article_column'): # Проверяем наличие и непустое значение
         log_msgs.append("Колонка с артикулами не выбрана")
         valid = False
     else:
-        log_msgs.append(f"Выбрана колонка артикулов: {st.session_state.article_column}")
+        # Проверяем, что обозначение колонки - буква или число
+        article_col = st.session_state.article_column
+        if not (article_col.isalpha() or article_col.isdigit()):
+            log_msgs.append(f"Неверное обозначение колонки с артикулами: '{article_col}'. Используйте букву (A, B, C...) или номер (1, 2, 3...)")
+            valid = False
+        else:
+            log_msgs.append(f"Выбрана колонка артикулов: {article_col} ({article_col if article_col.isdigit() else f'столбец {article_col}'})")
 
-    # 4. Проверяем, выбрана ли колонка для изображений (по НАЗВАНИЮ)
+    # 4. Проверяем, выбрана ли колонка для изображений
     if not st.session_state.get('image_column'): # Проверяем наличие и непустое значение
         log_msgs.append("Колонка для изображений не выбрана")
         valid = False
     else:
-        log_msgs.append(f"Выбрана колонка для изображений: {st.session_state.image_column}")
+        # Проверяем, что обозначение колонки - буква или число
+        image_col = st.session_state.image_column
+        if not (image_col.isalpha() or image_col.isdigit()):
+            log_msgs.append(f"Неверное обозначение колонки для изображений: '{image_col}'. Используйте букву (A, B, C...) или номер (1, 2, 3...)")
+            valid = False
+        else:
+            log_msgs.append(f"Выбрана колонка для изображений: {image_col} ({image_col if image_col.isdigit() else f'столбец {image_col}'})")
 
     # 5. Проверяем папку с изображениями
     images_folder = config_manager.get_setting("paths.images_folder_path", "")
@@ -596,7 +608,6 @@ def all_inputs_valid():
     log.info(final_msg)
     for msg in log_msgs:
         log.info(f"- {msg}")
-    # add_log_message(final_msg, "INFO" if valid else "WARNING") # Можно добавить в лог сессии
         
     return valid
 
@@ -988,24 +999,27 @@ def file_uploader_section():
                     default_article_index = column_options.index("A") if "A" in column_options else 0
                     default_image_index = column_options.index("B") if "B" in column_options else min(1, len(column_options)-1)
                     
-                    # Позволяем пользователю ввести буквенные обозначения колонок
+                    # Позволяем пользователю ввести буквенные или числовые обозначения колонок
                     col1, col2 = st.columns(2)
                     with col1:
                         selected_article_col = st.text_input(
-                            "Буква колонки с артикулами (A, B, C...)", 
-                            value="A",
+                            "Колонка с артикулами", 
+                            value=st.session_state.get('article_column', 'A'),
                             key="article_column_input",
-                            help="Введите букву колонки, содержащей артикулы товаров (например: A, B, C)"
+                            help="Введите букву (A, B, C...) или номер (1, 2, 3...) колонки, содержащей артикулы товаров"
                         )
-                        st.session_state.article_column = selected_article_col # Сохраняем выбранную букву
+                        st.caption("Примеры: 'A' или '1', 'B' или '2'")
+                        st.session_state.article_column = selected_article_col
+                        
                     with col2:
                         selected_image_col = st.text_input(
-                            "Буква колонки для изображений (A, B, C...)", 
-                            value="B",
+                            "Колонка для изображений", 
+                            value=st.session_state.get('image_column', 'B'),
                             key="image_column_input",
-                            help="Введите букву колонки для вставки изображений (например: B, C, D)"
+                            help="Введите букву (A, B, C...) или номер (1, 2, 3...) колонки для вставки изображений"
                         )
-                        st.session_state.image_column = selected_image_col # Сохраняем выбранное НАЗВАНИЕ
+                        st.caption("Примеры: 'B' или '2', 'C' или '3'")
+                        st.session_state.image_column = selected_image_col
                     
                     # Проверка всех необходимых полей перед обработкой
                     process_button_disabled = not all_inputs_valid()
@@ -1243,8 +1257,8 @@ def process_files():
                 # Вызываем функцию обработки, передавая имя листа
                 result_file_path, result_df, images_inserted, multiple_images_found, not_found_articles, image_search_results = process_excel_file(
                     file_path=excel_file_path,
-                    article_col_name=article_col_name if article_col_name.isalpha() else df.columns.get_loc(article_col_name) + 1,
-                    image_col_name=image_col_name if image_col_name.isalpha() else df.columns.get_loc(image_col_name) + 1,
+                    article_col_name=article_col_name,  # Передаем как есть, функция сама определит тип
+                    image_col_name=image_col_name,      # Передаем как есть, функция сама определит тип
                     image_folder=images_folder,
                     secondary_image_folder=secondary_folder,  # Передаем путь к вторичной папке
                     tertiary_image_folder=tertiary_folder,    # Передаем путь к третичной папке

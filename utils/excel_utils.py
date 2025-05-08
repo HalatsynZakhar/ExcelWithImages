@@ -1081,26 +1081,31 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
 
 def column_letter_to_index(column_letter: str) -> int:
     """
-    Преобразует буквенное обозначение столбца (A, B, C, AA, AB, etc.) в индекс (0-based).
+    Преобразует буквенное обозначение столбца (A, B, C, AA, AB, etc.) или числовое (1, 2, 3...) в индекс (0-based).
     
     Args:
-        column_letter (str): Буквенное обозначение столбца
+        column_letter (str): Буквенное или числовое обозначение столбца
         
     Returns:
         int: Индекс столбца (0-based)
         
     Raises:
-        ValueError: Если буквенное обозначение столбца неверное
+        ValueError: Если обозначение столбца неверное
     """
     try:
-        # Используем стандартную функцию из openpyxl и вычитаем 1 для получения 0-based индекса
+        # Если входное значение - число
+        if column_letter.isdigit():
+            col_idx = int(column_letter) - 1  # Преобразуем в 0-based индекс
+            logger.debug(f"Преобразование числового обозначения {column_letter} в индекс {col_idx}")
+            return col_idx
+            
+        # Если входное значение - буква
         col_idx = column_index_from_string(column_letter) - 1
-        logger.debug(f"Преобразование {column_letter} в индекс {col_idx}")
+        logger.debug(f"Преобразование буквенного обозначения {column_letter} в индекс {col_idx}")
         return col_idx
     except Exception as e:
-        logger.error(f"Ошибка при преобразовании буквы столбца '{column_letter}' в индекс: {e}")
-        # Выбрасываем исключение вместо возврата значения по умолчанию
-        raise ValueError(f"Неверное буквенное обозначение колонки: '{column_letter}'. Ошибка: {e}")
+        logger.error(f"Ошибка при преобразовании обозначения столбца '{column_letter}' в индекс: {e}")
+        raise ValueError(f"Неверное обозначение колонки: '{column_letter}'. Ошибка: {e}")
 
 def insert_images_to_excel(writer, df, image_column):
     """
