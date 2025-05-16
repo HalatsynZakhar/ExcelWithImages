@@ -50,6 +50,53 @@ EXCEL_PX_TO_PT_RATIO = 0.75  # Коэффициент преобразовани
 DEFAULT_EXCEL_COLUMN_WIDTH = 40  # Ширина колонки в единицах Excel (примерно 300px)
 MIN_COLUMN_WIDTH_PX = 100  # Минимальная допустимая ширина колонки в пикселях
 
+# <<< Constants for progress formatting >>>
+POWERSHELL_GREEN = '\033[92m'
+POWERSHELL_YELLOW = '\033[93m'
+POWERSHELL_CYAN = '\033[96m'
+POWERSHELL_RESET = '\033[0m'
+PROGRESS_SYMBOL = '■'
+
+def print_progress(current, total, extra_info=""):
+    """
+    Выводит прогресс в PowerShell с цветным форматированием
+    
+    Args:
+        current (int): Текущая позиция
+        total (int): Общее количество элементов
+        extra_info (str): Дополнительная информация для отображения
+    """
+    percent = round((current / total) * 100) if total > 0 else 0
+    
+    # Создаем цветную полосу прогресса
+    bar_length = 30
+    filled_length = int(bar_length * percent / 100)
+    bar = (POWERSHELL_GREEN + PROGRESS_SYMBOL * filled_length + 
+           POWERSHELL_YELLOW + '-' * (bar_length - filled_length) + 
+           POWERSHELL_RESET)
+    
+    # Вычисляем длину текста прогресса без учета цветовых кодов
+    progress_info = f"Прогресс: {bar} {percent}% ({current}/{total})"
+    
+    # Вычисляем точное количество пробелов для выравнивания
+    box_width = 60
+    # Вычитаем длину текста без учета цветовых ANSI кодов
+    right_padding = box_width - len(f"Прогресс: ") - bar_length - len(f" {percent}% ({current}/{total})") - 1
+    
+    # Форматируем вывод с яркими цветами и точным выравниванием
+    progress_text = f"\n{POWERSHELL_CYAN}╔{'═' * box_width}╗{POWERSHELL_RESET}"
+    progress_text += f"\n{POWERSHELL_CYAN}║{POWERSHELL_RESET} {progress_info}{' ' * max(0, right_padding)}{POWERSHELL_CYAN}║{POWERSHELL_RESET}"
+    
+    if extra_info:
+        # Правильное выравнивание для дополнительной информации
+        info_padding = box_width - len(extra_info) - 1
+        progress_text += f"\n{POWERSHELL_CYAN}║{POWERSHELL_RESET} {extra_info}{' ' * max(0, info_padding)}{POWERSHELL_CYAN}║{POWERSHELL_RESET}"
+        
+    progress_text += f"\n{POWERSHELL_CYAN}╚{'═' * box_width}╝{POWERSHELL_RESET}"
+    
+    print(progress_text, file=sys.stderr)
+    sys.stderr.flush()
+
 def ensure_temp_dir(prefix: str = "") -> str:
     """
     Создает и возвращает путь к временной директории.
@@ -316,6 +363,9 @@ def process_excel_file(
     first_image_processed = False
     successful_quality = DEFAULT_IMG_QUALITY  # Если не найдено, используем значение по умолчанию
     quality_determined = False  # Флаг, указывающий, был ли определен уровень качества
+    
+    # Общее количество строк для расчета прогресса
+    total_rows = len(df)
     
     # Итерация по строкам таблицы
     for excel_row_index, row in df.iterrows():
@@ -660,6 +710,10 @@ def process_excel_file(
                     raise
         else:
             print(f"[PROCESSOR WARNING] Пустой буфер изображения для артикула '{article_str}' (строка {excel_row_index})", file=sys.stderr)
+        
+        # Вывод прогресса обработки строк в процентах
+        extra_info = f"Строка: {excel_row_index + 1}, артикул: {article_str}"
+        print_progress(rows_processed, total_rows, extra_info)
     
     # --- Сохранение результата ---
     print("\n[PROCESSOR] --- Сохранение результата ---", file=sys.stderr)
@@ -703,6 +757,9 @@ def process_excel_file(
     
     print(f"[PROCESSOR] СТАТИСТИКА: Обработано строк: {rows_processed}, вставлено изображений: {images_inserted}", file=sys.stderr)
     print(f"[PROCESSOR] Общий размер вставленных изображений: {total_processed_image_size_kb:.2f} КБ", file=sys.stderr)
+    
+    # Финальный вывод прогресса обработки
+    print_progress(total_rows, total_rows, f"Завершено! Вставлено изображений: {images_inserted}")
     
     # Добавляем результаты поиска изображений к возвращаемым данным
     return result_file_path, df, images_inserted, multiple_images_found, not_found_articles, image_search_results
