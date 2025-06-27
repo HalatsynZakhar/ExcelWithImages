@@ -15,6 +15,9 @@ from PIL import Image as PILImage
 
 logger = logging.getLogger(__name__)
 
+# Глобальный кэш для хранения оптимального качества сжатия
+cached_quality = None
+
 def normalize_article(article: Any, for_excel: bool = False) -> str:
     """
     Нормализует артикул для поиска.
@@ -358,121 +361,102 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         logger.error(f"Ошибка при оптимизации изображения {image_path}: {e}")
         raise
 
-def optimize_image_for_excel(image_path: str, target_size_kb: int = 100, 
+def optimize_image_for_excel(image_path: str, target_size_kb: int = 100,
                           quality: int = 90, min_quality: int = 1,
-                          output_folder: Optional[str] = None) -> Union[io.BytesIO, Tuple[io.BytesIO, int]]:
+                          output_folder: Optional[str] = None) -> io.BytesIO:
     """
     Оптимизирует изображение до заданного размера в КБ для вставки в Excel.
-    Сначала пробует снижать качество JPEG, если не удается - возвращает лучший результат.
+    Для первого изображения использует двухэтапную оптимизацию качества:
+      1. От 100% до 5% с шагом 5%
+      2. От 4% до 1% с шагом 1%
+    Для последующих изображений использует кешированное качество.
+    Всегда сохраняет изображение с качеством 1%, даже если размер превышает лимит.
     
     Args:
         image_path (str): Путь к изображению
-        target_size_kb (int): Целевой размер файла в КБ (по умолчанию 100 КБ)
-        quality (int): Начальное качество JPEG (1-100)
-        min_quality (int): Минимально допустимое качество JPEG (снижено до 1% для максимального сжатия)
-        output_folder (Optional[str]): Папка для сохранения промежуточных результатов (если требуется)
+        target_size_kb (int): Целевой размер файла в КБ
+        quality (int): Не используется (оставлен для совместимости)
+        min_quality (int): Не используется (оставлен для совместимости)
+        output_folder (Optional[str]): Папка для сохранения
         
     Returns:
         io.BytesIO: Буфер с оптимизированным изображением
     """
-    # <<< Используем print в stderr вместо logger >>>
-    print(f"  [optimize_excel] Оптимизация изображения: {image_path}", file=sys.stderr)
-    print(f"  [optimize_excel] Цель: < {target_size_kb} КБ, Качество: {quality}-{min_quality}", file=sys.stderr)
-
-    if not os.path.isfile(image_path):
-        print(f"  [optimize_excel ERROR] Файл не найден: {image_path}", file=sys.stderr)
-        return io.BytesIO() # Возвращаем пустой буфер
-
-    try:
+    global cached_quality
+    
+    # Если качество кешировано - используем его
+    if cached_quality is not None:
+        print(f"  [optimize_excel] Используем кешированное качество: {cached_quality}%", file=sys.stderr)
         img = PILImage.open(image_path)
-        # --- Обработка прозрачности (замена на белый фон) ---
         if img.mode == 'RGBA' or 'transparency' in img.info:
-            print("  [optimize_excel] Обнаружена прозрачность, заменяем на белый фон.", file=sys.stderr)
             background = PILImage.new('RGB', img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3]) # 3 is the alpha channel
+            background.paste(img, mask=img.split()[3])
             img = background
         elif img.mode != 'RGB':
-             print(f"  [optimize_excel] Конвертируем изображение из {img.mode} в RGB.", file=sys.stderr)
-             img = img.convert('RGB')
-
-        result_buffer = io.BytesIO()
-        current_quality = quality
-        best_buffer = None
-        best_quality = quality  # Запоминаем лучшее качество
-        best_size_kb = float('inf')
-        found_within_limit = False
-
-        print("  [optimize_excel] Начало цикла снижения качества JPEG...", file=sys.stderr)
-        while current_quality >= min_quality:
-            result_buffer.seek(0)
-            result_buffer.truncate(0)
+            img = img.convert('RGB')
             
-            try:
-                # <<< Добавляем print перед сохранением >>>
-                print(f"    [optimize_excel] Попытка сохранения JPEG с качеством={current_quality}...", file=sys.stderr)
-                img.save(result_buffer, 'JPEG', quality=current_quality, optimize=True)
-                file_size_kb = result_buffer.tell() / 1024
-                # <<< Логируем размер ПОСЛЕ сохранения >>>
-                print(f"    [optimize_excel] Попытка: качество={current_quality}, РЕАЛЬНЫЙ размер={file_size_kb:.1f} КБ", file=sys.stderr)
-                
-                # Обновляем лучший результат, если текущий УСПЕШНО сохранился и МЕНЬШЕ
-                if file_size_kb < best_size_kb:
-                    # <<< Копируем буфер для сохранения >>> 
-                    current_buffer_value = result_buffer.getvalue()
-                    best_buffer = io.BytesIO(current_buffer_value)
-                    best_size_kb = file_size_kb
-                    best_quality = current_quality  # Запоминаем качество
-                    print(f"      -> Новый лучший результат сохранен (качество {current_quality}, размер {best_size_kb:.1f} КБ)", file=sys.stderr)
-                
-                if file_size_kb <= target_size_kb:
-                    print(f"      -> Успех! Размер ({file_size_kb:.1f} КБ) <= лимита ({target_size_kb} КБ)", file=sys.stderr)
-                    found_within_limit = True
-                    break
-                         
-            except Exception as save_e:
-                print(f"    [optimize_excel ERROR] Ошибка сохранения с качеством {current_quality}: {save_e}", file=sys.stderr)
-                # Пропускаем это качество
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=cached_quality)
+        buffer.seek(0)
+        return buffer
 
-            # Уменьшаем качество с разным шагом в зависимости от диапазона
-            if current_quality > 5:
-                current_quality -= 5  # Шаг 5% для качества > 5%
-            else:
-                current_quality -= 1  # Шаг 1% для качества <= 5%
+    print(f"  [optimize_excel] Оптимизация первого изображения: {image_path}", file=sys.stderr)
+    print(f"  [optimize_excel] Цель: < {target_size_kb} КБ", file=sys.stderr)
 
-        # --- Возвращаем результат --- 
-        if best_buffer is not None:
-             final_size_kb = best_buffer.tell() / 1024
-             print(f"  [optimize_excel] Оптимизация завершена. Итоговый размер: {final_size_kb:.1f} КБ (лучший был {best_size_kb:.1f} КБ). В лимит ({target_size_kb} КБ) уложились: {found_within_limit}", file=sys.stderr)
-             print(f"  [optimize_excel] Итоговое качество сжатия: {best_quality}%", file=sys.stderr)
-             # Добавляем специальный маркер для легкого поиска
-             print(f"  [QUALITY_MARKER] НАЙДЕНО_КАЧЕСТВО_ДЛЯ_ИЗОБРАЖЕНИЯ: {best_quality}", file=sys.stderr)
-             
-             # Записываем качество во временный файл для гарантии
-             try:
-                 with open(os.path.join(tempfile.gettempdir(), "last_image_quality.txt"), "w") as quality_file:
-                     quality_file.write(str(best_quality))
-             except Exception as qf_e:
-                 print(f"  [optimize_excel] Ошибка записи качества во временный файл: {qf_e}", file=sys.stderr)
-             
-             best_buffer.seek(0)
-             return best_buffer
-        else:
-             print(f"  [optimize_excel ERROR] Не удалось сохранить JPEG ни с одним качеством ({quality}-{min_quality}). Попытка вернуть оригинал.", file=sys.stderr)
-             try:
-                with open(image_path, 'rb') as f_orig:
-                    # <<< Возвращаем БУФЕР с оригиналом >>>
-                    original_buffer = io.BytesIO(f_orig.read())
-                    print(f"    [optimize_excel] Возвращен буфер с оригинальным файлом ({original_buffer.tell()/1024:.1f} КБ).", file=sys.stderr)
-                    return original_buffer
-             except Exception as read_e:
-                print(f"  [optimize_excel ERROR] Ошибка чтения оригинала '{image_path}': {read_e}", file=sys.stderr)
-                return io.BytesIO() # Возвращаем пустой буфер
+    img = PILImage.open(image_path)
+    if img.mode == 'RGBA' or 'transparency' in img.info:
+        print("  [optimize_excel] Обнаружена прозрачность, заменяем на белый фон.", file=sys.stderr)
+        background = PILImage.new('RGB', img.size, (255, 255, 255))
+        background.paste(img, mask=img.split()[3])
+        img = background
+    elif img.mode != 'RGB':
+        print(f"  [optimize_excel] Конвертируем изображение из {img.mode} в RGB.", file=sys.stderr)
+        img = img.convert('RGB')
 
-    except Exception as e:
-        print(f"  [optimize_excel CRITICAL ERROR] Ошибка при оптимизации {image_path}: {e}", file=sys.stderr)
-        import traceback
-        traceback.print_exc(file=sys.stderr)
-        return io.BytesIO() # Возвращаем пустой буфер при критической ошибке
+    best_buffer = None
+    best_quality = None
+
+    # Этап 1: от 100 до 5 с шагом 5
+    for q in range(100, 4, -5):
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=q)
+        size_kb = buffer.tell() / 1024
+        print(f"    Этап 1: качество {q}% - размер {size_kb:.1f} КБ", file=sys.stderr)
+        
+        if size_kb <= target_size_kb:
+            best_buffer = buffer
+            best_quality = q
+            print(f"  [optimize_excel] Найдено подходящее качество: {q}%", file=sys.stderr)
+            break
+
+    # Этап 2: от 4 до 1 с шагом 1 (если не нашли в этапе 1)
+    if best_buffer is None:
+        for q in range(4, 0, -1):
+            buffer = io.BytesIO()
+            img.save(buffer, format='JPEG', quality=q)
+            size_kb = buffer.tell() / 1024
+            print(f"    Этап 2: качество {q}% - размер {size_kb:.1f} КБ", file=sys.stderr)
+            
+            if size_kb <= target_size_kb:
+                best_buffer = buffer
+                best_quality = q
+                print(f"  [optimize_excel] Найдено подходящее качество: {q}%", file=sys.stderr)
+                break
+
+    # Если не нашли подходящего качества, используем 1%
+    if best_buffer is None:
+        print(f"  [optimize_excel] Используем минимальное качество (1%)", file=sys.stderr)
+        best_buffer = io.BytesIO()
+        img.save(best_buffer, format='JPEG', quality=1)
+        best_quality = 1
+
+    # Кешируем найденное качество для следующих изображений
+    cached_quality = best_quality
+    print(f"  [optimize_excel] Итоговое качество: {best_quality}% (кешировано)", file=sys.stderr)
+    best_buffer.seek(0)
+    return best_buffer
+
+
 
 def process_image(image_path: str, width: Optional[int] = None, height: Optional[int] = None,
                  max_size_kb: int = 200) -> Tuple[io.BytesIO, Tuple[int, int]]:
