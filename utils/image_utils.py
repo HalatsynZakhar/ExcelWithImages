@@ -13,7 +13,7 @@ import tempfile
 
 from PIL import Image as PILImage
 
-logger = logging.getLogger(__name__)
+#logger = logging.get#logger(__name__)
 
 # Глобальный кэш для хранения оптимального качества сжатия
 cached_quality = None
@@ -83,7 +83,7 @@ def find_images_recursively(folder: str, supported_extensions: Tuple[str, ...]) 
     
     # Проверяем, что папка существует
     if not os.path.isdir(folder):
-        logger.warning(f"Папка не существует: {folder}")
+        #logger.warning(f"Папка не существует: {folder}")
         return result
         
     # Рекурсивно обходим все вложенные папки
@@ -94,7 +94,7 @@ def find_images_recursively(folder: str, supported_extensions: Tuple[str, ...]) 
                 # Сохраняем полный путь к файлу
                 result[file] = file_path
                 
-    logger.debug(f"Рекурсивный поиск нашел {len(result)} изображений в папке {folder} и подпапках")
+    #logger.debug(f"Рекурсивный поиск нашел {len(result)} изображений в папке {folder} и подпапках")
     return result
 
 def find_image_by_article(article: Any, images_folder: str, 
@@ -112,24 +112,24 @@ def find_image_by_article(article: Any, images_folder: str,
     """
     try:
         if not article:
-            logger.warning("Пустой артикул")
+            #logger.warning("Пустой артикул")
             return None
             
         if not os.path.exists(images_folder):
-            logger.error(f"Папка не найдена: {images_folder}")
+            #logger.error(f"Папка не найдена: {images_folder}")
             return None
             
         normalized_article = normalize_article(article)
         if not normalized_article:
-            logger.warning(f"Артикул после нормализации пуст: {article}")
+            #logger.warning(f"Артикул после нормализации пуст: {article}")
             return None
             
-        logger.debug(f"Ищем изображение для артикула '{article}' (нормализованный: '{normalized_article}')")
+        #logger.debug(f"Ищем изображение для артикула '{article}' (нормализованный: '{normalized_article}')")
         
         # Рекурсивно получаем все файлы из папки и подпапок
         all_files = find_images_recursively(images_folder, supported_extensions)
         if not all_files:
-            logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
+            #logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
             return None
         
         # Создаем словарь нормализованных имен файлов
@@ -139,38 +139,38 @@ def find_image_by_article(article: Any, images_folder: str,
             name_without_ext = os.path.splitext(filename)[0]
             normalized_name = normalize_article(name_without_ext)
             file_dict[normalized_name] = filepath
-            logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
+            #logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
                 
-        logger.debug(f"Всего найдено {len(all_files)} изображений с поддерживаемыми расширениями")
+        #logger.debug(f"Всего найдено {len(all_files)} изображений с поддерживаемыми расширениями")
                 
         # Проверяем точное совпадение
         if normalized_article in file_dict:
             image_path = file_dict[normalized_article]
-            logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
+            #logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
             
             # Дополнительная проверка, что файл существует и доступен
             if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
                 return image_path
             else:
-                logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                #logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
                 return None
             
         # Проверяем частичное совпадение
         for norm_name, filepath in file_dict.items():
             if normalized_article in norm_name or norm_name in normalized_article:
-                logger.info(f"Найдено частичное совпадение для артикула '{article}': {filepath}")
+                #logger.info(f"Найдено частичное совпадение для артикула '{article}': {filepath}")
                 
                 # Дополнительная проверка, что файл существует и доступен
                 if os.path.isfile(filepath) and os.access(filepath, os.R_OK):
                     return filepath
                 else:
-                    logger.warning(f"Найденный файл не существует или недоступен: {filepath}")
+                    #logger.warning(f"Найденный файл не существует или недоступен: {filepath}")
                     continue
                 
-        logger.warning(f"Изображение для артикула '{article}' не найдено")
+        #logger.warning(f"Изображение для артикула '{article}' не найдено")
         return None
     except Exception as e:
-        logger.error(f"Ошибка при поиске изображения по артикулу '{article}': {e}")
+        #logger.error(f"Ошибка при поиске изображения по артикулу '{article}': {e}")
         return None
 
 def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Optional[int] = None,
@@ -196,7 +196,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
     """
     try:
         if not os.path.exists(image_path):
-            logger.error(f"Изображение не найдено: {image_path}")
+            #logger.error(f"Изображение не найдено: {image_path}")
             raise FileNotFoundError(f"Изображение не найдено: {image_path}")
             
         # Открываем изображение
@@ -205,7 +205,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         # Получаем исходный формат и размер
         original_format = img.format
         original_size_kb = os.path.getsize(image_path) / 1024
-        logger.debug(f"Исходное изображение: формат {original_format}, размер {original_size_kb:.2f} КБ")
+        #logger.debug(f"Исходное изображение: формат {original_format}, размер {original_size_kb:.2f} КБ")
         
         # Изменяем размер, сохраняя пропорции
         original_width, original_height = img.size
@@ -214,7 +214,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         new_height = int(original_height * ratio)
         
         img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
-        logger.debug(f"Изменен размер до {new_width}x{new_height}")
+        #logger.debug(f"Изменен размер до {new_width}x{new_height}")
         
         # Вначале пробуем сохранить в исходном формате
         output = io.BytesIO()
@@ -228,7 +228,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         else:
             formats_to_try = ['JPEG', 'PNG', 'WEBP']
         
-        logger.debug(f"Порядок форматов для оптимизации: {formats_to_try}")
+        #logger.debug(f"Порядок форматов для оптимизации: {formats_to_try}")
         
         # Конвертируем в RGB, если необходимо (для форматов, не поддерживающих прозрачность)
         has_alpha = img.mode == 'RGBA'
@@ -240,7 +240,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         best_buffer = None
         
         for img_format in formats_to_try:
-            logger.debug(f"Пробуем формат: {img_format}")
+            #logger.debug(f"Пробуем формат: {img_format}")
             
             # Подготавливаем изображение в зависимости от формата
             if img_format == 'JPEG' and has_alpha:
@@ -263,7 +263,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                     
                     # Проверяем размер
                     size_kb = temp_output.tell() / 1024
-                    logger.debug(f"Формат {img_format}, качество {quality}: размер {size_kb:.2f} КБ")
+                    #logger.debug(f"Формат {img_format}, качество {quality}: размер {size_kb:.2f} КБ")
                     
                     if size_kb <= max_size_kb and size_kb < best_size:
                         best_size = size_kb
@@ -272,7 +272,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                         # Сохраняем копию буфера
                         temp_output.seek(0)
                         best_buffer = io.BytesIO(temp_output.getvalue())
-                        logger.debug(f"Найден новый лучший вариант: {img_format}, качество {quality}, размер {size_kb:.2f} КБ")
+                        #logger.debug(f"Найден новый лучший вариант: {img_format}, качество {quality}, размер {size_kb:.2f} КБ")
                     
                     # Если размер уже приемлемый, можно выходить
                     if size_kb <= max_size_kb:
@@ -286,7 +286,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                 rgb_img.save(temp_output, format=img_format, optimize=True)
                 
                 size_kb = temp_output.tell() / 1024
-                logger.debug(f"Формат {img_format}: размер {size_kb:.2f} КБ")
+                #logger.debug(f"Формат {img_format}: размер {size_kb:.2f} КБ")
                 
                 if size_kb <= max_size_kb and size_kb < best_size:
                     best_size = size_kb
@@ -295,11 +295,11 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                     # Сохраняем копию буфера
                     temp_output.seek(0)
                     best_buffer = io.BytesIO(temp_output.getvalue())
-                    logger.debug(f"Найден новый лучший вариант: {img_format}, размер {size_kb:.2f} КБ")
+                    #logger.debug(f"Найден новый лучший вариант: {img_format}, размер {size_kb:.2f} КБ")
         
         # Если даже после всех попыток не удалось достичь требуемого размера
         if best_buffer is None or best_size > max_size_kb:
-            logger.warning(f"Не удалось достичь требуемого размера {max_size_kb} КБ. Уменьшаем изображение.")
+            #logger.warning(f"Не удалось достичь требуемого размера {max_size_kb} КБ. Уменьшаем изображение.")
             
             # Пробуем уменьшать изображение до тех пор, пока не достигнем требуемого размера
             scale_factor = 0.9  # Уменьшаем на 10%
@@ -311,7 +311,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                 new_height = int(new_height * scale_factor)
                 
                 if new_width < 50 or new_height < 50:
-                    logger.warning("Изображение стало слишком маленьким. Прекращаем уменьшение.")
+                    #logger.warning("Изображение стало слишком маленьким. Прекращаем уменьшение.")
                     break
                     
                 smaller_img = img.resize((new_width, new_height), PILImage.Resampling.LANCZOS)
@@ -322,7 +322,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                 rgb_img.save(temp_output, format='JPEG', quality=min_quality, optimize=True)
                 
                 size_kb = temp_output.tell() / 1024
-                logger.debug(f"Уменьшенное до {new_width}x{new_height}, качество {min_quality}: размер {size_kb:.2f} КБ")
+                #logger.debug(f"Уменьшенное до {new_width}x{new_height}, качество {min_quality}: размер {size_kb:.2f} КБ")
                 
                 if size_kb <= max_size_kb:
                     best_size = size_kb
@@ -330,14 +330,14 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
                     best_quality = min_quality
                     temp_output.seek(0)
                     best_buffer = io.BytesIO(temp_output.getvalue())
-                    logger.info(f"После уменьшения размера найден вариант: JPEG, размер {size_kb:.2f} КБ, {new_width}x{new_height}")
+                    #logger.info(f"После уменьшения размера найден вариант: JPEG, размер {size_kb:.2f} КБ, {new_width}x{new_height}")
                     break
                 
                 scale_factor -= 0.1
         
         # Если все равно не удалось, возвращаем JPEG с минимальным качеством и размером
         if best_buffer is None:
-            logger.warning("Не удалось оптимизировать изображение до требуемого размера. Возвращаем минимальный вариант.")
+            #logger.warning("Не удалось оптимизировать изображение до требуемого размера. Возвращаем минимальный вариант.")
             smaller_img = img.resize((100, 100), PILImage.Resampling.LANCZOS)
             output = io.BytesIO()
             smaller_img.convert('RGB').save(output, format='JPEG', quality=min_quality, optimize=True)
@@ -358,7 +358,7 @@ def optimize_image(image_path: str, max_size_kb: int = 500, target_width: Option
         return best_buffer
         
     except Exception as e:
-        logger.error(f"Ошибка при оптимизации изображения {image_path}: {e}")
+        #logger.error(f"Ошибка при оптимизации изображения {image_path}: {e}")
         raise
 
 def optimize_image_for_excel(image_path: str, target_size_kb: int = 100,
@@ -473,49 +473,49 @@ def process_image(image_path: str, width: Optional[int] = None, height: Optional
         Tuple[io.BytesIO, Tuple[int, int]]: Буфер с изображением и его размеры (ширина, высота)
     """
     try:
-        logger.debug(f"Начинаем обработку изображения: {image_path}")
+        #logger.debug(f"Начинаем обработку изображения: {image_path}")
         
         if not os.path.exists(image_path):
-            logger.error(f"Изображение не найдено: {image_path}")
+            #logger.error(f"Изображение не найдено: {image_path}")
             raise FileNotFoundError(f"Изображение не найдено: {image_path}")
         
         # Проверяем размер файла
         file_size_kb = os.path.getsize(image_path) / 1024
-        logger.debug(f"Исходный размер файла: {file_size_kb:.2f} КБ")
+        #logger.debug(f"Исходный размер файла: {file_size_kb:.2f} КБ")
         
         # Открываем изображение
         try:
             img = PILImage.open(image_path)
-            logger.debug(f"Изображение открыто: {img.format}, размер: {img.size}, режим: {img.mode}")
+            #logger.debug(f"Изображение открыто: {img.format}, размер: {img.size}, режим: {img.mode}")
         except Exception as e:
-            logger.error(f"Не удалось открыть изображение {image_path}: {e}")
+            #logger.error(f"Не удалось открыть изображение {image_path}: {e}")
             raise
         
         # Получаем исходные размеры
         original_width, original_height = img.size
-        logger.debug(f"Исходные размеры: {original_width}x{original_height}")
+        #logger.debug(f"Исходные размеры: {original_width}x{original_height}")
         
         # Определяем целевые размеры с сохранением пропорций
         if width is not None and height is not None:
             # Используем указанные размеры
             target_width, target_height = width, height
-            logger.debug(f"Используем указанные размеры: {target_width}x{target_height}")
+            #logger.debug(f"Используем указанные размеры: {target_width}x{target_height}")
         elif width is not None:
             # Сохраняем соотношение сторон на основе ширины
             ratio = width / original_width
             target_width = width
             target_height = int(original_height * ratio)
-            logger.debug(f"Масштабирование по ширине ({width}): новые размеры {target_width}x{target_height}")
+            #logger.debug(f"Масштабирование по ширине ({width}): новые размеры {target_width}x{target_height}")
         elif height is not None:
             # Сохраняем соотношение сторон на основе высоты
             ratio = height / original_height
             target_height = height
             target_width = int(original_width * ratio)
-            logger.debug(f"Масштабирование по высоте ({height}): новые размеры {target_width}x{target_height}")
+            #logger.debug(f"Масштабирование по высоте ({height}): новые размеры {target_width}x{target_height}")
         else:
             # Если размеры не указаны, используем оригинальные
             target_width, target_height = original_width, original_height
-            logger.debug(f"Используем оригинальные размеры: {target_width}x{target_height}")
+            #logger.debug(f"Используем оригинальные размеры: {target_width}x{target_height}")
         
         # Оптимизируем изображение
         try:
@@ -527,21 +527,21 @@ def process_image(image_path: str, width: Optional[int] = None, height: Optional
                 target_width=target_width,
                 target_height=target_height
             )
-            logger.debug(f"Оптимизация завершена, размер буфера: {img_buffer.tell() / 1024:.2f} КБ")
+            #logger.debug(f"Оптимизация завершена, размер буфера: {img_buffer.tell() / 1024:.2f} КБ")
         except Exception as e:
-            logger.error(f"Ошибка при оптимизации изображения: {e}")
+            #logger.error(f"Ошибка при оптимизации изображения: {e}")
             raise
         
         # Определяем фактические размеры оптимизированного изображения
         try:
             with PILImage.open(img_buffer) as optimized_img:
                 actual_width, actual_height = optimized_img.size
-                logger.debug(f"Фактические размеры после оптимизации: {actual_width}x{actual_height}")
+                #logger.debug(f"Фактические размеры после оптимизации: {actual_width}x{actual_height}")
         except Exception as e:
-            logger.error(f"Ошибка при получении размеров оптимизированного изображения: {e}")
+            #logger.error(f"Ошибка при получении размеров оптимизированного изображения: {e}")
             # Если не удалось получить фактические размеры, используем целевые
             actual_width, actual_height = target_width, target_height
-            logger.warning(f"Используем целевые размеры вместо фактических: {actual_width}x{actual_height}")
+            #logger.warning(f"Используем целевые размеры вместо фактических: {actual_width}x{actual_height}")
         
         # Сбрасываем указатель буфера в начало
         img_buffer.seek(0)
@@ -551,7 +551,7 @@ def process_image(image_path: str, width: Optional[int] = None, height: Optional
         
         return img_buffer, (actual_width, actual_height)
     except Exception as e:
-        logger.exception(f"Ошибка при обработке изображения {image_path}: {e}")
+        #logger.exception(f"Ошибка при обработке изображения {image_path}: {e}")
         raise
 
 def get_image_dimensions(image_path: str) -> Optional[Tuple[int, int]]:
@@ -566,14 +566,14 @@ def get_image_dimensions(image_path: str) -> Optional[Tuple[int, int]]:
     """
     try:
         if not os.path.exists(image_path):
-            logger.error(f"Изображение не найдено: {image_path}")
+            #logger.error(f"Изображение не найдено: {image_path}")
             return None
         
         with PILImage.open(image_path) as img:
             width, height = img.size
             return width, height
     except Exception as e:
-        logger.error(f"Ошибка при получении размеров изображения {image_path}: {e}")
+        #logger.error(f"Ошибка при получении размеров изображения {image_path}: {e}")
         return None
 
 def get_images_in_folder(folder_path: str, 
@@ -590,7 +590,7 @@ def get_images_in_folder(folder_path: str,
     """
     try:
         if not os.path.exists(folder_path):
-            logger.error(f"Папка не найдена: {folder_path}")
+            #logger.error(f"Папка не найдена: {folder_path}")
             return []
         
         image_paths = []
@@ -600,10 +600,10 @@ def get_images_in_folder(folder_path: str,
                 image_path = os.path.join(folder_path, filename)
                 image_paths.append(image_path)
         
-        logger.info(f"Найдено {len(image_paths)} изображений в папке {folder_path}")
+        #logger.info(f"Найдено {len(image_paths)} изображений в папке {folder_path}")
         return image_paths
     except Exception as e:
-        logger.error(f"Ошибка при получении списка изображений из папки {folder_path}: {e}")
+        #logger.error(f"Ошибка при получении списка изображений из папки {folder_path}: {e}")
         return []
 
 def create_thumbnail(image_path: str, max_size: int = 100, quality: int = 85) -> Optional[io.BytesIO]:
@@ -620,7 +620,7 @@ def create_thumbnail(image_path: str, max_size: int = 100, quality: int = 85) ->
     """
     try:
         if not os.path.exists(image_path):
-            logger.error(f"Изображение не найдено: {image_path}")
+            #logger.error(f"Изображение не найдено: {image_path}")
             return None
         
         # Открываем изображение
@@ -649,7 +649,7 @@ def create_thumbnail(image_path: str, max_size: int = 100, quality: int = 85) ->
         
         return thumb_buffer
     except Exception as e:
-        logger.error(f"Ошибка при создании миниатюры для {image_path}: {e}")
+        #logger.error(f"Ошибка при создании миниатюры для {image_path}: {e}")
         return None
 
 def save_buffer_to_file(buffer: io.BytesIO, output_path: str) -> bool:
@@ -673,10 +673,10 @@ def save_buffer_to_file(buffer: io.BytesIO, output_path: str) -> bool:
         with open(output_path, 'wb') as f:
             f.write(buffer.getvalue())
         
-        logger.debug(f"Файл сохранен: {output_path}")
+        #logger.debug(f"Файл сохранен: {output_path}")
         return True
     except Exception as e:
-        logger.error(f"Ошибка при сохранении файла {output_path}: {e}")
+        #logger.error(f"Ошибка при сохранении файла {output_path}: {e}")
         return False
 
 def convert_image_format(image_path: str, output_format: str = 'JPEG', 
@@ -694,7 +694,7 @@ def convert_image_format(image_path: str, output_format: str = 'JPEG',
     """
     try:
         if not os.path.exists(image_path):
-            logger.error(f"Изображение не найдено: {image_path}")
+            #logger.error(f"Изображение не найдено: {image_path}")
             return None
         
         # Открываем изображение
@@ -718,7 +718,7 @@ def convert_image_format(image_path: str, output_format: str = 'JPEG',
         
         return output_buffer
     except Exception as e:
-        logger.error(f"Ошибка при конвертации изображения {image_path} в формат {output_format}: {e}")
+        #logger.error(f"Ошибка при конвертации изображения {image_path} в формат {output_format}: {e}")
         return None
 
 def extract_articles_from_image_names(folder_path: str, 
@@ -735,7 +735,7 @@ def extract_articles_from_image_names(folder_path: str,
     """
     try:
         if not os.path.exists(folder_path):
-            logger.error(f"Папка не найдена: {folder_path}")
+            #logger.error(f"Папка не найдена: {folder_path}")
             return {}
         
         article_to_image = {}
@@ -752,10 +752,10 @@ def extract_articles_from_image_names(folder_path: str,
                 image_path = os.path.join(folder_path, filename)
                 article_to_image[normalized_article] = image_path
         
-        logger.info(f"Извлечено {len(article_to_image)} артикулов из изображений в папке {folder_path}")
+        #logger.info(f"Извлечено {len(article_to_image)} артикулов из изображений в папке {folder_path}")
         return article_to_image
     except Exception as e:
-        logger.error(f"Ошибка при извлечении артикулов из имен файлов в папке {folder_path}: {e}")
+        #logger.error(f"Ошибка при извлечении артикулов из имен файлов в папке {folder_path}: {e}")
         return {}
 
 def find_images_by_article(article: Any, images_folder: str,
@@ -773,25 +773,25 @@ def find_images_by_article(article: Any, images_folder: str,
     """
     try:
         if not article:
-            logger.warning("Пустой артикул")
+            #logger.warning("Пустой артикул")
             return []
             
         if not os.path.exists(images_folder):
-            logger.error(f"Папка не найдена: {images_folder}")
+            #logger.error(f"Папка не найдена: {images_folder}")
             return []
             
         normalized_article_to_find = normalize_article(article)
         if not normalized_article_to_find:
-            logger.warning(f"Артикул после нормализации пуст: {article}")
+            #logger.warning(f"Артикул после нормализации пуст: {article}")
             return []
             
-        logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}')")
+        #logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}')")
         
         # Рекурсивно получаем все файлы из папки и подпапок
         all_files = find_images_recursively(images_folder, supported_extensions)
         
         if not all_files:
-            logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
+            #logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
             return []
             
         # Создаем словарь нормализованных имен файлов
@@ -806,7 +806,7 @@ def find_images_by_article(article: Any, images_folder: str,
         # Проверяем точное совпадение
         if normalized_article_to_find in normalized_name_to_path:
             image_path = normalized_name_to_path[normalized_article_to_find]
-            logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
+            #logger.debug(f"Найдено точное совпадение для артикула '{article}': {image_path}")
             
             if os.access(image_path, os.R_OK):
                 found_image_paths.append(image_path)
@@ -815,17 +815,18 @@ def find_images_by_article(article: Any, images_folder: str,
         if not found_image_paths:
             for norm_name, image_path in normalized_name_to_path.items():
                 if normalized_article_to_find in norm_name or norm_name in normalized_article_to_find:
-                    logger.debug(f"Найдено частичное совпадение для артикула '{article}': {image_path}")
+                    #logger.debug(f"Найдено частичное совпадение для артикула '{article}': {image_path}")
                     
                     if os.access(image_path, os.R_OK):
                         found_image_paths.append(image_path)
                         
         if not found_image_paths:
-            logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
+            #logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
+            pass
             
         return found_image_paths
     except Exception as e:
-        logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
+        #logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
         return []
 
 def find_images_by_article_name(article: Any, images_folder: str,
@@ -846,11 +847,11 @@ def find_images_by_article_name(article: Any, images_folder: str,
     try:
         # Проверка входных данных
         if not article:
-            logger.warning("Пустой артикул")
+            #logger.warning("Пустой артикул")
             return []
             
         if not os.path.exists(images_folder):
-            logger.error(f"Папка не найдена: {images_folder}")
+            #logger.error(f"Папка не найдена: {images_folder}")
             return []
         
         # Сохраняем оригинальный артикул для строгого сравнения
@@ -859,10 +860,10 @@ def find_images_by_article_name(article: Any, images_folder: str,
         # Нормализуем артикул
         normalized_article_to_find = normalize_article(article)
         if not normalized_article_to_find:
-            logger.warning(f"Артикул после нормализации пуст: {article}")
+            #logger.warning(f"Артикул после нормализации пуст: {article}")
             return []
             
-        logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}')")
+        #logger.debug(f"Ищем изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}')")
         
         # Словарь для быстрого поиска по нормализованному имени
         normalized_name_to_path = {}
@@ -873,7 +874,7 @@ def find_images_by_article_name(article: Any, images_folder: str,
             all_files = find_images_recursively(images_folder, supported_extensions)
             
             if not all_files:
-                logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
+                #logger.warning(f"Не найдено изображений в папке и подпапках: {images_folder}")
                 return []
                 
             # Строим словарь нормализованных имен
@@ -886,11 +887,11 @@ def find_images_by_article_name(article: Any, images_folder: str,
                     "filepath": filepath,
                     "original_name": original_name
                 }
-                logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
+                #logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
         else:
             # Ищем только в указанной папке
             if not os.path.isdir(images_folder):
-                logger.error(f"Указанный путь не является папкой: {images_folder}")
+                #logger.error(f"Указанный путь не является папкой: {images_folder}")
                 return []
                 
             for filename in os.listdir(images_folder):
@@ -904,13 +905,13 @@ def find_images_by_article_name(article: Any, images_folder: str,
                         "filepath": filepath,
                         "original_name": original_name
                     }
-                    logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
+                    #logger.debug(f"Найдено изображение: {filename} (нормализованное имя: '{normalized_name}')")
             
             if not normalized_name_to_path:
-                logger.warning(f"Не найдено изображений в папке: {images_folder}")
+                #logger.warning(f"Не найдено изображений в папке: {images_folder}")
                 return []
         
-        logger.debug(f"Всего найдено {len(normalized_name_to_path)} изображений с поддерживаемыми расширениями")
+        #logger.debug(f"Всего найдено {len(normalized_name_to_path)} изображений с поддерживаемыми расширениями")
         
         found_image_paths = []
         
@@ -918,42 +919,44 @@ def find_images_by_article_name(article: Any, images_folder: str,
         for normalized_name, file_info in normalized_name_to_path.items():
             if original_article == file_info["original_name"]:
                 image_path = file_info["filepath"]
-                logger.debug(f"Найдено строгое (точное) совпадение для артикула '{article}': {image_path}")
+                #logger.debug(f"Найдено строгое (точное) совпадение для артикула '{article}': {image_path}")
                 
                 if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
                     found_image_paths.append(image_path)
                 else:
-                    logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                    #logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                    pass
         
         # Если нашли хотя бы одно строгое совпадение, возвращаем его
         if found_image_paths:
-            logger.info(f"Найдены строгие совпадения ({len(found_image_paths)} шт.) для артикула '{article}'")
+            #logger.info(f"Найдены строгие совпадения ({len(found_image_paths)} шт.) для артикула '{article}'")
             return found_image_paths
                 
         # 2. Проверяем точное совпадение после нормализации
         for normalized_name, file_info in normalized_name_to_path.items():
             if normalized_article_to_find == normalized_name:
                 image_path = file_info["filepath"]
-                logger.debug(f"Найдено точное совпадение по нормализованным именам для артикула '{article}': {image_path}")
+                #logger.debug(f"Найдено точное совпадение по нормализованным именам для артикула '{article}': {image_path}")
                 
                 if os.path.isfile(image_path) and os.access(image_path, os.R_OK):
                     found_image_paths.append(image_path)
                 else:
-                    logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                    #logger.warning(f"Найденный файл не существует или недоступен: {image_path}")
+                    pass
                     
         # Если нашли точные совпадения после нормализации, возвращаем их
         if found_image_paths:
-            logger.info(f"Найдены точные совпадения после нормализации ({len(found_image_paths)} шт.) для артикула '{article}'")
+            #logger.info(f"Найдены точные совпадения после нормализации ({len(found_image_paths)} шт.) для артикула '{article}'")
             return found_image_paths
         
         # Если не найдены точные совпадения, ничего не возвращаем
-        logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
+        #logger.warning(f"Изображения для артикула '{article}' (нормализованный: '{normalized_article_to_find}') не найдены.")
         return []
             
     except Exception as e:
-        logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
+        #logger.error(f"Ошибка при поиске изображений по артикулу '{article}': {e}")
         import traceback
-        logger.error(traceback.format_exc())
+        #logger.error(traceback.format_exc())
         return []
 
 def find_images_in_multiple_folders(
@@ -992,7 +995,7 @@ def find_images_in_multiple_folders(
 
     # Проверяем, что артикул не пустой
     if not article:
-        logger.warning("Пустой артикул")
+        #logger.warning("Пустой артикул")
         return {
             "found": False,
             "images": [],
@@ -1024,7 +1027,7 @@ def find_images_in_multiple_folders(
     
     # Если нет папок для поиска, возвращаем пустой результат
     if not folders_to_search:
-        logger.warning(f"Не указаны папки для поиска изображений для артикула: {article}")
+        #logger.warning(f"Не указаны папки для поиска изображений для артикула: {article}")
         return {
             "found": False,
             "images": [],
@@ -1041,7 +1044,7 @@ def find_images_in_multiple_folders(
         folder_path = folder_info["path"]
         folder_priority = folder_info["priority"]
         
-        logger.debug(f"Поиск изображений для артикула '{article}' в папке #{folder_priority}: {folder_path}")
+        #logger.debug(f"Поиск изображений для артикула '{article}' в папке #{folder_priority}: {folder_path}")
         
         # Ищем изображения в текущей папке
         found_images = find_images_by_article_name(
@@ -1057,7 +1060,7 @@ def find_images_in_multiple_folders(
             match_name = os.path.basename(found_images[0])
             match_name = os.path.splitext(match_name)[0]
             
-            logger.info(f"Найдены изображения для артикула '{article}' в папке #{folder_priority}: {folder_path}")
+            #logger.info(f"Найдены изображения для артикула '{article}' в папке #{folder_priority}: {folder_path}")
             return {
                 "found": True,
                 "images": found_images,
@@ -1070,7 +1073,7 @@ def find_images_in_multiple_folders(
             }
     
     # Если не нашли изображения ни в одной папке
-    logger.warning(f"Не найдены изображения для артикула '{article}' ни в одной из указанных папок")
+    #logger.warning(f"Не найдены изображения для артикула '{article}' ни в одной из указанных папок")
     return {
         "found": False,
         "images": [],

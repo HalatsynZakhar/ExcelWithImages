@@ -37,7 +37,7 @@ def open_workbook(file_path: str) -> Workbook:
     """
     try:
         if os.path.exists(file_path):
-            logger.debug(f"Открытие существующего файла: {file_path}")
+            #logger.debug(f"Открытие существующего файла: {file_path}")
             return openpyxl.load_workbook(file_path)
         else:
             logger.info(f"Файл не найден, создаем новый: {file_path}")
@@ -88,7 +88,7 @@ def get_cell_value(worksheet: Worksheet, row: int, column: Union[int, str]) -> A
         else:
             cell = worksheet.cell(row=row, column=column)
         
-        logger.debug(f"Получено значение ячейки [{row}, {column}]: {cell.value}")
+        #logger.debug(f"Получено значение ячейки [{row}, {column}]: {cell.value}")
         return cell.value
     except Exception as e:
         logger.error(f"Ошибка при получении значения ячейки [{row}, {column}]: {e}")
@@ -114,7 +114,7 @@ def set_cell_value(worksheet: Worksheet, row: int, column: Union[int, str], valu
             cell = worksheet.cell(row=row, column=column)
         
         cell.value = value
-        logger.debug(f"Установлено значение ячейки [{row}, {column}]: {value}")
+        #logger.debug(f"Установлено значение ячейки [{row}, {column}]: {value}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при установке значения ячейки [{row}, {column}]: {e}")
@@ -136,7 +136,7 @@ def find_column_by_header(worksheet: Worksheet, header_text: str, header_row: in
         for column in range(1, worksheet.max_column + 1):
             cell_value = worksheet.cell(row=header_row, column=column).value
             if cell_value and str(cell_value).strip() == header_text.strip():
-                logger.debug(f"Найден столбец '{header_text}' на позиции {column}")
+                #logger.debug(f"Найден столбец '{header_text}' на позиции {column}")
                 return column
         
         logger.warning(f"Столбец с заголовком '{header_text}' не найден")
@@ -183,7 +183,7 @@ def get_range_values(worksheet: Worksheet, start_row: int, start_column: Union[i
                 row_values.append(worksheet.cell(row=row, column=col).value)
             values.append(row_values)
         
-        logger.debug(f"Получены значения из диапазона [{start_row}, {start_column}] - [{end_row}, {end_column}]")
+        #logger.debug(f"Получены значения из диапазона [{start_row}, {start_column}] - [{end_row}, {end_column}]")
         return values
     except Exception as e:
         logger.error(f"Ошибка при получении значений из диапазона: {e}")
@@ -208,7 +208,7 @@ def set_column_width(worksheet: Worksheet, column: Union[int, str], width: float
             column_letter = column
         
         worksheet.column_dimensions[column_letter].width = width
-        logger.debug(f"Установлена ширина столбца {column_letter}: {width}")
+        #logger.debug(f"Установлена ширина столбца {column_letter}: {width}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при установке ширины столбца {column}: {e}")
@@ -228,7 +228,7 @@ def set_row_height(worksheet: Worksheet, row: int, height: float) -> bool:
     """
     try:
         worksheet.row_dimensions[row].height = height
-        logger.debug(f"Установлена высота строки {row}: {height}")
+        #logger.debug(f"Установлена высота строки {row}: {height}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при установке высоты строки {row}: {e}")
@@ -287,7 +287,7 @@ def apply_style_to_cell(worksheet: Worksheet, row: int, column: Union[int, str],
         if fill_color:
             cell.fill = PatternFill(start_color=fill_color, end_color=fill_color, fill_type='solid')
         
-        logger.debug(f"Применены стили к ячейке [{row}, {column}]")
+        #logger.debug(f"Применены стили к ячейке [{row}, {column}]")
         return True
     except Exception as e:
         logger.error(f"Ошибка при применении стилей к ячейке [{row}, {column}]: {e}")
@@ -334,7 +334,7 @@ def apply_style_to_range(worksheet: Worksheet, start_row: int, start_column: Uni
                 )
                 success = success and cell_success
         
-        logger.debug(f"Применены стили к диапазону [{start_row}, {start_column}] - [{end_row}, {end_column}]")
+        #logger.debug(f"Применены стили к диапазону [{start_row}, {start_column}] - [{end_row}, {end_column}]")
         return success
     except Exception as e:
         logger.error(f"Ошибка при применении стилей к диапазону: {e}")
@@ -472,7 +472,7 @@ def merge_cells(worksheet: Worksheet, start_row: int, start_column: Union[int, s
         merge_range = f"{start_column}{start_row}:{end_column}{end_row}"
         worksheet.merge_cells(merge_range)
         
-        logger.debug(f"Объединены ячейки в диапазоне {merge_range}")
+        #logger.debug(f"Объединены ячейки в диапазоне {merge_range}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при объединении ячеек: {e}")
@@ -565,7 +565,7 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         # Устанавливаем цвет фона ячейки, если указан
         if background_color:
             set_cell_background(worksheet, anchor_cell, background_color)
-            logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
+            #logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
             
         # Создаем объект изображения
         img = XLImage(image_path)
@@ -581,7 +581,7 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
             aspect_ratio = original_height / original_width if original_width > 0 else 1.0
             img.width = width
             img.height = int(width * aspect_ratio)
-            logger.debug(f"Изображение масштабировано с сохранением пропорций: {img.width}x{img.height}")
+            #logger.debug(f"Изображение масштабировано с сохранением пропорций: {img.width}x{img.height}")
         else:
             # Иначе устанавливаем размеры как указано
             if width is not None:
@@ -592,7 +592,7 @@ def insert_image(worksheet: Worksheet, image_path: str, anchor_cell: str,
         # Вставляем изображение
         worksheet.add_image(img, anchor_cell)
         
-        logger.debug(f"Изображение вставлено в ячейку {anchor_cell}, размеры: {img.width}x{img.height}")
+        #logger.debug(f"Изображение вставлено в ячейку {anchor_cell}, размеры: {img.width}x{img.height}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при вставке изображения в ячейку {anchor_cell}: {e}")
@@ -627,12 +627,12 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             logger.error(f"Пустой буфер изображения для ячейки {anchor_cell}")
             return False
             
-        logger.debug(f"Вставка изображения из буфера в ячейку {anchor_cell}. Размер буфера: {buffer_size/1024:.2f} КБ")
+        #logger.debug(f"Вставка изображения из буфера в ячейку {anchor_cell}. Размер буфера: {buffer_size/1024:.2f} КБ")
         
         # Устанавливаем цвет фона ячейки, если указан
         if background_color:
             set_cell_background(worksheet, anchor_cell, background_color)
-            logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
+            #logger.debug(f"Установлен цвет фона {background_color} для ячейки {anchor_cell}")
         
         # Сбрасываем указатель буфера в начало
         image_buffer.seek(0)
@@ -642,7 +642,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             from PIL import Image as PILImage
             img = PILImage.open(image_buffer)
             original_width, original_height = img.size
-            logger.debug(f"Размеры изображения из буфера: {original_width}x{original_height}")
+            #logger.debug(f"Размеры изображения из буфера: {original_width}x{original_height}")
             # Возвращаем указатель в начало буфера после чтения размеров
             image_buffer.seek(0)
         except Exception as e:
@@ -654,7 +654,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
             temp_path = temp_file.name
             temp_file.write(image_buffer.getvalue())
-            logger.debug(f"Создан временный файл для вставки: {temp_path}")
+            #logger.debug(f"Создан временный файл для вставки: {temp_path}")
         
         try:
             # Создаем объект Image с временного файла
@@ -667,23 +667,23 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
                     aspect_ratio = original_height / original_width if original_width > 0 else 1.0
                     img.width = width
                     img.height = int(width * aspect_ratio)
-                    logger.debug(f"Установлены размеры с сохранением пропорций: {img.width}x{img.height} (соотношение: {aspect_ratio:.2f})")
+                    #logger.debug(f"Установлены размеры с сохранением пропорций: {img.width}x{img.height} (соотношение: {aspect_ratio:.2f})")
                 else:
                     img.width = width
                     img.height = height
-                    logger.debug(f"Установлены фиксированные размеры: {img.width}x{img.height}")
+                    #logger.debug(f"Установлены фиксированные размеры: {img.width}x{img.height}")
             elif width is not None:
                 img.width = width
                 # Автоматически рассчитываем высоту для сохранения пропорций
                 aspect_ratio = original_height / original_width if original_width > 0 else 1.0
                 img.height = int(width * aspect_ratio)
-                logger.debug(f"Установлена ширина {img.width} и автоматическая высота {img.height}")
+                #logger.debug(f"Установлена ширина {img.width} и автоматическая высота {img.height}")
             elif height is not None:
                 img.height = height
                 # Автоматически рассчитываем ширину для сохранения пропорций
                 aspect_ratio = original_width / original_height if original_height > 0 else 1.0
                 img.width = int(height * aspect_ratio)
-                logger.debug(f"Установлена высота {img.height} и автоматическая ширина {img.width}")
+                #logger.debug(f"Установлена высота {img.height} и автоматическая ширина {img.width}")
             
             # Вставляем изображение в ячейку
             img.anchor = anchor_cell
@@ -691,7 +691,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             # Устанавливаем тип привязки изображения
             if hasattr(img, 'anchor_type') and anchor_type in ['oneCellAnchor', 'absoluteAnchor', 'twoCellAnchor']:
                 img.anchor_type = anchor_type
-                logger.debug(f"Установлен тип привязки: {anchor_type}")
+                #logger.debug(f"Установлен тип привязки: {anchor_type}")
             
             # Проверяем и при необходимости увеличиваем высоту строки
             row_num = int(''.join(filter(str.isdigit, anchor_cell)))
@@ -705,7 +705,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
                 
                 if current_height < excel_height:
                     worksheet.row_dimensions[row_num].height = excel_height
-                    logger.debug(f"Увеличена высота строки {row_num} до {excel_height}")
+                    #logger.debug(f"Увеличена высота строки {row_num} до {excel_height}")
             
             worksheet.add_image(img, anchor_cell)
             
@@ -714,7 +714,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             if not hasattr(worksheet, '_temp_image_files'):
                 worksheet._temp_image_files = []
             worksheet._temp_image_files.append(temp_path)
-            logger.debug(f"Временный файл {temp_path} добавлен в список для последующей очистки")
+            #logger.debug(f"Временный файл {temp_path} добавлен в список для последующей очистки")
             
             return True
             
@@ -722,7 +722,7 @@ def insert_image_from_buffer(worksheet: Worksheet, image_buffer, anchor_cell: st
             logger.error(f"Ошибка при добавлении изображения в ячейку {anchor_cell}: {add_e}")
             try:
                 os.unlink(temp_path)  # Удаляем только в случае ошибки
-                logger.debug(f"Удален временный файл после ошибки: {temp_path}")
+                #logger.debug(f"Удален временный файл после ошибки: {temp_path}")
             except Exception as del_e:
                 logger.warning(f"Не удалось удалить временный файл {temp_path}: {del_e}")
             return False
@@ -778,7 +778,7 @@ def auto_adjust_column_width(worksheet: Worksheet, columns: List[Union[int, str]
             adjusted_width = min(max(min_width, max_content_width + padding), max_width)
             worksheet.column_dimensions[col_letter].width = adjusted_width
             
-            logger.debug(f"Автоматически установлена ширина столбца {col_letter}: {adjusted_width}")
+            #logger.debug(f"Автоматически установлена ширина столбца {col_letter}: {adjusted_width}")
         
         return True
     except Exception as e:
@@ -943,7 +943,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                 if article_value:
                     total_rows += 1
                     articles_list.append(article_value)
-                    logger.debug(f"Найден артикул в строке {row}: {article_value}")
+                    #logger.debug(f"Найден артикул в строке {row}: {article_value}")
         
         stats["total_articles"] = total_rows
         logger.info(f"Найдено {total_rows} строк с артикулами")
@@ -987,7 +987,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
             if not article:
                 continue
             
-            logger.debug(f"Обрабатываем артикул: {article} (строка {row})")
+            #logger.debug(f"Обрабатываем артикул: {article} (строка {row})")
             
             # Ищем изображение по артикулу
             image_path = image_utils.find_image_by_article(article, images_folder)
@@ -1000,7 +1000,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                 try:
                     # Получаем исходные размеры изображения
                     original_width, original_height = image_utils.get_image_dimensions(image_path)
-                    logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
+                    #logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
                     
                     # Обрабатываем изображение только с оптимизацией качества,
                     # но без принудительного изменения размеров
@@ -1009,7 +1009,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                         max_size_kb=max_size_kb
                     )
                     
-                    logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
+                    #logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
                     
                     # Вставляем изображение в ячейку
                     try:
@@ -1021,7 +1021,7 @@ def process_excel_file(excel_file: str, article_column: str, image_column: str,
                             # Устанавливаем высоту строки (1 единица ≈ 0.75 пункта)
                             row_height_excel = row_height * 0.75  # Приблизительное преобразование пикселей в единицы высоты строки
                             ws.row_dimensions[row].height = row_height_excel
-                            logger.debug(f"Установлена высота строки {row}: {row_height_excel} ед. ({row_height} пикс.)")
+                            #logger.debug(f"Установлена высота строки {row}: {row_height_excel} ед. ({row_height} пикс.)")
                         
                         # Определяем ширину и высоту на основе пропорций изображения
                         aspect_ratio = original_height / original_width if original_width > 0 else 1.0
@@ -1096,12 +1096,12 @@ def column_letter_to_index(column_letter: str) -> int:
         # Если входное значение - число
         if column_letter.isdigit():
             col_idx = int(column_letter) - 1  # Преобразуем в 0-based индекс
-            logger.debug(f"Преобразование числового обозначения {column_letter} в индекс {col_idx}")
+            #logger.debug(f"Преобразование числового обозначения {column_letter} в индекс {col_idx}")
             return col_idx
             
         # Если входное значение - буква
         col_idx = column_index_from_string(column_letter) - 1
-        logger.debug(f"Преобразование буквенного обозначения {column_letter} в индекс {col_idx}")
+        #logger.debug(f"Преобразование буквенного обозначения {column_letter} в индекс {col_idx}")
         return col_idx
     except Exception as e:
         logger.error(f"Ошибка при преобразовании обозначения столбца '{column_letter}' в индекс: {e}")
@@ -1218,7 +1218,7 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
         if image_column_index is not None:
             image_column_letter = get_column_letter(image_column_index)
             ws.column_dimensions[image_column_letter].width = 20  # Примерная ширина для изображений
-            logger.debug(f"Установлена ширина колонки с изображениями {image_column_letter}: 20")
+            #logger.debug(f"Установлена ширина колонки с изображениями {image_column_letter}: 20")
         else:
             logger.warning(f"Колонка с изображениями '{image_column}' не найдена в DataFrame")
             image_column_letter = 'B'  # Значение по умолчанию
@@ -1251,7 +1251,7 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
                     try:
                         # Получаем оригинальные размеры изображения
                         original_width, original_height = image_utils.get_image_dimensions(image_path)
-                        logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
+                        #logger.debug(f"Оригинальные размеры изображения: {original_width}x{original_height}")
                         
                         # Обрабатываем изображение только с оптимизацией качества,
                         # но без принудительного изменения размеров
@@ -1260,7 +1260,7 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
                             max_size_kb=max_size_kb
                         )
                         
-                        logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
+                        #logger.debug(f"Изображение оптимизировано для вставки в Excel (размер файла не более {max_size_kb}KB)")
                         
                         # Вставляем изображение в ячейку
                         try:
@@ -1272,7 +1272,7 @@ def save_dataframe_with_images(excel_file: str, df: pd.DataFrame,
                                 # Устанавливаем высоту строки (1 единица ≈ 0.75 пункта)
                                 row_height_excel = row_height * 0.75  # Приблизительное преобразование пикселей в единицы высоты строки
                                 ws.row_dimensions[excel_row].height = row_height_excel
-                                logger.debug(f"Установлена высота строки {excel_row}: {row_height_excel} ед. ({row_height} пикс.)")
+                                #logger.debug(f"Установлена высота строки {excel_row}: {row_height_excel} ед. ({row_height} пикс.)")
                             
                             # Определяем ширину и высоту на основе пропорций изображения
                             aspect_ratio = original_height / original_width if original_width > 0 else 1.0
@@ -1357,7 +1357,7 @@ def get_column_width_pixels(worksheet: Worksheet, column_letter: str) -> int:
         # Применяем небольшую корректировку для более точного соответствия
         pixels = int(pixels * 0.95)  # Уменьшаем на 5% для более точного соответствия
         
-        logger.debug(f"Ширина колонки {column_letter}: {width_in_excel_units} ед. Excel ≈ {pixels} пикселей")
+        #logger.debug(f"Ширина колонки {column_letter}: {width_in_excel_units} ед. Excel ≈ {pixels} пикселей")
         return pixels
     except Exception as e:
         logger.error(f"Ошибка при получении ширины колонки {column_letter}: {e}")
@@ -1386,7 +1386,7 @@ def set_cell_background(worksheet: Worksheet, cell_reference: str, color: str = 
         # Применяем заливку
         cell.fill = PatternFill(start_color=color, end_color=color, fill_type='solid')
         
-        logger.debug(f"Установлен цвет заливки ячейки {cell_reference}: {color}")
+        #logger.debug(f"Установлен цвет заливки ячейки {cell_reference}: {color}")
         return True
     except Exception as e:
         logger.error(f"Ошибка при установке цвета заливки ячейки {cell_reference}: {e}")
