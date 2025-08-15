@@ -47,6 +47,8 @@ def normalize_article(article: Any, for_excel: bool = False) -> str:
         # Для данных из Excel: заменяем все спецсимволы (кроме пробелов) на дефисы
         # Сохраняем буквы, цифры и пробелы, остальное заменяем на дефисы
         normalized = ''
+        #print(f"[PROCESSOR]  МЕНЯ ВИЗВАЛИ. ДО   {article_str}", file=sys.stderr)
+
         for char in article_str:
             if char.isalnum() or char == ' ':
                 normalized += char
@@ -54,7 +56,10 @@ def normalize_article(article: Any, for_excel: bool = False) -> str:
                 normalized += '-'
         # Приводим к нижнему регистру
         normalized = normalized.lower()
+        #print(f"[PROCESSOR]  Вот это я получил  {normalized}", file=sys.stderr)
+
     else:
+        #print(f"[PROCESSOR]  МЕНЯ ВИЗВАЛИ. ДО   {article_str}", file=sys.stderr)
         # Для имен файлов: заменяем все спецсимволы (кроме пробелов и нижнего подчеркивания) на дефисы
         # Сохраняем буквы, цифры, пробелы и нижнее подчеркивание
         normalized = ''
@@ -65,7 +70,7 @@ def normalize_article(article: Any, for_excel: bool = False) -> str:
                 normalized += '-'
         # Приводим к нижнему регистру
         normalized = normalized.lower()
-    
+        #print(f"[PROCESSOR]  Вот это я получил  {normalized}", file=sys.stderr)
     return normalized
 
 def find_images_recursively(folder: str, supported_extensions: Tuple[str, ...]) -> Dict[str, str]:
@@ -1008,7 +1013,7 @@ def find_images_in_multiple_folders(
         }
     
     # Нормализуем артикул для поиска из Excel
-    normalized_article = normalize_article(article, for_excel=True)
+    article = normalize_article(article, for_excel=True)
     
     # Создаем список папок для поиска (удаляем пустые или несуществующие)
     folders_to_search = []
